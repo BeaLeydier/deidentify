@@ -24,9 +24,10 @@ re-running.
    may exist only to build another, so scan construction/cleaning scripts too.
    Put `scripts/` on the adopath and call `find_used_variables, dofiles("<a.do
    b.do>") datasets("<x.dta y.dta>") outdir(<dir>) alwayskeep("<id patterns>")`. It
-   tokenizes every script and, per dataset, writes a review CSV (`varusage_<name>.csv`:
-   each variable marked used/how) plus a `varusage_summary.csv` (kept vs candidates
-   to drop per dataset). It is deliberately **conservative — when unsure, keep**.
+   tokenizes every script and writes **one review workbook** (`varusage_review.xlsx`:
+   a `summary` tab of kept-vs-candidates per dataset, and a `variables` tab marking
+   each variable used/how with an **empty `decision` column** for the reviewer to
+   fill keep/drop). It is deliberately **conservative — when unsure, keep**.
 
 2. **Always keep the structural variables** even if they look unused: ID variables
    (and their scrambled versions) and anything needed to **merge, sort, or set a

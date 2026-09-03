@@ -52,11 +52,15 @@ Build **one row per number** with its metadata and stat type (coef / SE / p /
 N / R² / test), for **all** of them — not the headline few. Then merge the two
 tables on a shared key and run `scripts/compare_tables.py REF.csv NEW.csv OUT_DIR`:
 it differences **at the reported precision** (a cell matches when the new value
-rounds to the reference; small float noise ignored) and writes:
-- `comparison_full.csv` — every cell side-by-side: reference, new, difference,
-  `status` (exact / differs / missing), and a `reason` column to fill per mismatch.
-- `comparison_summary.csv` — totals and breakdown: # exact, # differ, # missing,
+rounds to the reference; small float noise ignored) and writes **one review
+workbook** `comparison_review.xlsx`:
+- a `full` tab — every cell side-by-side: reference, new, difference, `status`
+  (exact / differs / missing), and an **empty `reason` column to fill per mismatch**.
+- a `summary` tab — totals and breakdown: # exact, # differ, # missing, `result`,
   and counts by stat type — the eyeball-able bottom line.
+
+It **exits nonzero** when any cell differs or is missing, so a discrepancy can't be
+missed by not reading the log.
 
 Systematic coverage is the point: it catches what a spot-check misses (a single
 mis-captured statistic, or a handful of cells that differ for a documented reason).

@@ -21,16 +21,17 @@ correctness guarantee you verify at the end.
 
 ## Steps
 
-**Callable programs (put the scripts dir on the adopath, then call by name):**
-`adopath + "<this skill>/scripts"` makes `scramble_id`, `union_of`, `verify_idmaps`,
-and `cmp_og_deid` available.
+`scripts/scramble_id.ado` is a standalone command (`adopath + "<scripts>"`, then
+call it); `scripts/verify_scramble.do` is an adaptable **template** you copy and
+edit per package.
 
 1. **Build one correspondence table per ID — seeded, monotonic, 1-to-1, new
-   range.** Load the id's old values into a variable `oldval` (use `union_of <id>
-   "f1.dta" "f2.dta"` for an id spanning files), then call
-   `scramble_id <newname> <lo> <hi>` — the engine that produces the `<id>,<id>_pubrep`
-   table (it exits with an error if the range is too tight to stay 1-to-1). Each
-   property has a reason:
+   range.** Load the id's old values into a variable `oldval` (for an id spanning
+   files, union them first: `clear; tempfile a; save `a', emptyok; foreach f in
+   f1 f2 { use <id> using "`f'", clear; append using `a'; save `a', replace };
+   rename <id> oldval`), then call `scramble_id <newname> <lo> <hi>` — the engine
+   that produces the `<id>,<id>_pubrep` table (it errors if the range is too tight
+   to stay 1-to-1). Each property has a reason:
    - **Seeded** (`set seed N`) — replicable.
    - **1-to-1** — a bijection; anything else changes counts/merges.
    - **Monotonic (order-preserving), not a random shuffle** — analysis code often
@@ -65,21 +66,19 @@ and `cmp_og_deid` available.
    current version — see `references/stata-runnability.md` (also covers two real
    traps when editing a dofile programmatically).
 
-5. **Verify — fail-loud, to files.** Call `verify_idmaps, keys("<dir>")
-   idspec("<id> <lo> <hi> ; <id2> <lo> <hi>")` for the per-map checks (1-to-1,
-   monotonic, new range disjoint) and `cmp_og_deid, orig(<file>) deid(<file>)
-   key(<key>) allowdiff(<redacted vars>)` for the **whole-dataset diff over ALL
-   variables** (not a pre-selected subset) — which *shows* the only changes are the
-   renamed ids plus any intended redaction, and catches silent corruption (e.g. a
-   stray `_merge`). For the original↔deid diff, first merge the idmap into the
-   original so both share the scrambled key; **align by that key, never by row
-   position** — merges re-sort, so `_n`-alignment reports false mismatches. Also
-   confirm no original id variable remains (`confirm variable X, exact`). Each
-   program writes a per-check CSV **and** a `*_summary.csv` with a `result` column,
-   and on failure drops a `*_FAILED.flag` sentinel. **Detection contract:** check
-   the sentinel / the `result` column — **do not** rely on the process exit code,
-   because Stata batch mode returns 0 even on `exit 459` (that `exit` still halts an
-   in-Stata do-file chain). (Python steps elsewhere in the suite *do* exit nonzero.)
+5. **Verify — fail-loud, to one workbook.** Copy and adapt
+   `scripts/verify_scramble.do` (a template — the datasets/keys/composite keys are
+   package-specific). It runs, per id map, the 1-to-1 / monotonic / new-range-disjoint
+   checks, plus a **whole-dataset diff over ALL variables** (not a pre-selected
+   subset) that *shows* the only changes are the renamed ids plus any intended
+   redaction, and catches silent corruption (e.g. a stray `_merge`). For that diff,
+   first merge the idmap into the original so both share the scrambled key, and
+   **align by that key, never by row position** — merges re-sort, so `_n`-alignment
+   reports false mismatches. It writes ONE workbook (`verify_review.xlsx`: sheets
+   `idmap_checks`, `dataset_diffs`, `summary` with a `result` cell) and, on failure,
+   drops a `verify_FAILED.flag` sentinel. **Detection contract:** check the sentinel /
+   the `result` cell — **not** the process exit code, because Stata batch returns 0
+   even on `exit 459` (that `exit` still halts an in-Stata do-file chain).
 
 6. **Smoke-test the run.** Run the updated package end-to-end once to confirm it
    still executes after the ID swap (fix runnability halts via the reference).

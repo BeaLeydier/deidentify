@@ -1,6 +1,7 @@
 *! list_pii_surfaces -- enumerate PII surfaces in the dataset in memory (read-only).
-* Results go to FILES (not the screen): a per-variable table, a counts summary, and
-* a text dump of the free-text surfaces. Put this dir on the adopath, then:
+* Writes ONE review workbook (<stub>_review.xlsx: sheets `summary`, `variables`)
+* plus a free-text dump (<stub>_dump.txt). The `variables` sheet has empty `is_pii`
+* and `action` columns for the reviewer to fill. Put this dir on the adopath, then:
 *     use "data.dta", clear
 *     list_pii_surfaces, stub(surfaces) outdir(".")
 * See references/pii-surfaces.md for the full checklist (A-D).
@@ -8,7 +9,7 @@ program define list_pii_surfaces, rclass
     syntax , STUB(string) [OUTdir(string)]
     if "`outdir'"=="" local outdir "."
 
-    * --- free-text surfaces (documentation dump): B1 value labels, B4 notes+char, B2/B3 ---
+    * --- free-text surfaces dump (B1 value labels, B4 notes+char, B2/B3 keywords) ---
     quietly log using "`outdir'/`stub'_dump.txt", text replace name(surfdump)
     di "=== VALUE LABELS (B1) ==="
     label list
@@ -21,9 +22,10 @@ program define list_pii_surfaces, rclass
             id respondent enumerator interviewer village household consent
     quietly log close surfdump
 
-    * --- per-variable table: A1 strings, A3 numerics, B2 labels ---
+    * --- per-variable table -> intermediate CSV (A1 strings, A3 numerics, B2 labels) ---
+    tempfile vcsv
     tempname V
-    file open `V' using "`outdir'/`stub'_variables.csv", write replace
+    file open `V' using "`vcsv'", write replace
     file write `V' "variable,type,is_string,value_label,variable_label" _n
     local nstr = 0
     local nlab = 0
@@ -40,26 +42,38 @@ program define list_pii_surfaces, rclass
     }
     file close `V'
 
-    * --- counts summary to a CSV (do NOT make the user read the log) ---
     quietly describe
     local nvars = r(k)
     local nobs  = r(N)
     quietly label dir
     local nlabdefs : word count `r(names)'
-    quietly notes
-    tempname S
-    file open `S' using "`outdir'/`stub'_summary.csv", write replace
-    file write `S' "metric,value" _n
-    file write `S' "n_variables,`nvars'" _n
-    file write `S' "n_observations,`nobs'" _n
-    file write `S' "n_string_variables,`nstr'" _n
-    file write `S' "n_numeric_variables,`=`nvars'-`nstr''" _n
-    file write `S' "n_variables_with_value_label,`nlab'" _n
-    file write `S' "n_value_labels_defined,`nlabdefs'" _n
-    file write `S' "n_variables_with_var_label,`nvarlab'" _n
-    file close `S'
+
+    * --- assemble ONE workbook: variables sheet (+ empty input cols) + summary ---
+    import delimited using "`vcsv'", varnames(1) clear stringcols(_all)
+    gen is_pii = ""          // reviewer input: yes/no
+    gen action = ""          // reviewer input: drop / placeholder / keep
+    export excel using "`outdir'/`stub'_review.xlsx", sheet("variables") sheetreplace firstrow(variables)
+
+    clear
+    set obs 7
+    gen str32 metric = ""
+    gen str32 value  = ""
+    replace metric = "n_variables"                  in 1
+    replace value  = "`nvars'"                       in 1
+    replace metric = "n_observations"               in 2
+    replace value  = "`nobs'"                        in 2
+    replace metric = "n_string_variables"           in 3
+    replace value  = "`nstr'"                        in 3
+    replace metric = "n_numeric_variables"          in 4
+    replace value  = "`=`nvars'-`nstr''"             in 4
+    replace metric = "n_variables_with_value_label" in 5
+    replace value  = "`nlab'"                        in 5
+    replace metric = "n_value_labels_defined"       in 6
+    replace value  = "`nlabdefs'"                    in 6
+    replace metric = "n_variables_with_var_label"   in 7
+    replace value  = "`nvarlab'"                     in 7
+    export excel using "`outdir'/`stub'_review.xlsx", sheet("summary") sheetreplace firstrow(variables)
 
     return scalar n_string = `nstr'
-    return scalar n_value_labels = `nlabdefs'
     return scalar n_variables = `nvars'
 end

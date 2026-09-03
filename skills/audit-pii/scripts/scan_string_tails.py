@@ -12,12 +12,13 @@ tooling -- it parses the file's own <map> to locate the variable table and data,
 then for every string variable inspects the bytes after each cell's terminator.
 
 Usage:
-    python3 scan_string_tails.py PATH.dta [OUT_DIR]
+    python3 scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]
 
-Outputs (systematic: full detail + summary):
-    string_tails_full.csv     one row per string cell that has residue
-    string_tails_summary.csv  one row per string variable (counts, % , examples)
+Outputs:
+    string_tails_full.csv   one row per string cell that has residue (evidence)
+    a `string_tails` sheet appended to the review workbook (per-variable summary)
 Exit status is NONZERO if any residue is found (fail-loud), 0 if clean.
+Requires openpyxl for the workbook sheet (pip install openpyxl).
 
 Not Stata? The concept is identical for any fixed-width string storage; port the
 "bytes after the terminator" check to your format. For pre-117 .dta, first re-save
@@ -55,10 +56,20 @@ def parse_dta(raw):
     return names, widths, is_str, data0, rec, nobs
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit("usage: scan_string_tails.py PATH.dta [OUT_DIR]")
-    path = sys.argv[1]
-    outdir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(os.path.abspath(path)) or "."
+    # usage: scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]
+    # Appends a `string_tails` sheet to the shared audit workbook (created if absent)
+    # so the reviewer opens ONE file; the full per-cell dump stays a side CSV.
+    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if not pos:
+        sys.exit("usage: scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]")
+    path = pos[0]
+    outdir = pos[1] if len(pos) > 1 else os.path.dirname(os.path.abspath(path)) or "."
+    xlsx = None
+    for a in sys.argv:
+        if a.startswith("--xlsx="):
+            xlsx = a.split("=", 1)[1]
+    if xlsx is None:
+        xlsx = f"{outdir}/audit_review.xlsx"
     raw = open(path, "rb").read()
     names, widths, is_str, data0, rec, nobs = parse_dta(raw)
     offs = [sum(widths[:i]) for i in range(len(widths))]
@@ -89,20 +100,29 @@ def main():
         summary.append([nm, f"str{w}", nobs, n_res,
                         round(100*n_res/nobs, 2) if nobs else 0, len(pats), example])
 
+    # full per-cell evidence stays a side CSV (can be large); the review SUMMARY
+    # goes into the shared audit workbook as a `string_tails` sheet.
     with open(f"{outdir}/string_tails_full.csv", "w", newline="") as f:
         wtr = csv.writer(f); wtr.writerow(["variable","obs","value","terminator_pos","tail_ascii","tail_hex"])
         wtr.writerows(full_rows)
-    with open(f"{outdir}/string_tails_summary.csv", "w", newline="") as f:
-        wtr = csv.writer(f)
-        wtr.writerow(["variable","type","n_cells","cells_with_residue","pct_residue","distinct_patterns","example_residue"])
-        wtr.writerows(summary)
+
+    from openpyxl import Workbook, load_workbook
+    if os.path.exists(xlsx):
+        wb = load_workbook(xlsx)
+    else:
+        wb = Workbook(); wb.remove(wb.active)      # start clean; sheet added below
+    if "string_tails" in wb.sheetnames:
+        wb.remove(wb["string_tails"])
+    ws = wb.create_sheet("string_tails")
+    ws.append(["variable","type","n_cells","cells_with_residue","pct_residue",
+               "distinct_patterns","example_residue"])
+    for r in summary:
+        ws.append(r)
+    wb.save(xlsx)
 
     total = sum(r[3] for r in summary)
     print(f"scanned {sum(is_str)} string variable(s) x {nobs} obs in {os.path.basename(path)}")
-    for r in summary:
-        flag = "  <-- RESIDUE" if r[3] else ""
-        print(f"  {r[0]:24s} {r[1]:>7s}  residue cells: {r[3]:7d}  ({r[4]}%){flag}")
-    print(f"wrote string_tails_full.csv ({len(full_rows)} rows) and string_tails_summary.csv")
+    print(f"wrote string_tails_full.csv ({len(full_rows)} rows) and 'string_tails' sheet -> {xlsx}")
     if total:
         print(f"FLAG: {total} cell(s) carry hidden residual bytes -> strip-pii clean-overwrite required")
         sys.exit(1)

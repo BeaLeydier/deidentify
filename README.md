@@ -5,6 +5,13 @@ code packages and datasets, and for proving a cleaned package still
 reproduces its results. Skills are language-agnostic in method; examples are shown
 in Stata (`.do`/`.dta`).
 
+Each skill produces **one review workbook** (`.xlsx` with tabs — a summary, detail,
+and columns for the reviewer to fill) rather than scattered files, and flags fail
+*hard*: Python tools exit nonzero; Stata programs write a `result` cell and a
+`*_FAILED.flag` sentinel (Stata batch always returns OS exit 0). Requirements: Stata
+for the `.ado`/`.do` tools; Python 3 with **openpyxl** (`pip install openpyxl`) for
+the `.py` tools' workbook output.
+
 ## Skills
 
 | Skill | Invoke as | Purpose |

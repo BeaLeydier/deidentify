@@ -70,26 +70,34 @@ def main():
         full.append(row)
 
     cols = ["key"] + [c for c in meta_cols if c != "key"] + ["reference","new","difference","status","reason"]
-    with open(f"{outdir}/comparison_full.csv","w",newline="") as f:
-        w = csv.DictWriter(f, fieldnames=cols); w.writeheader()
-        for r in full: w.writerow(r)
-    with open(f"{outdir}/comparison_summary.csv","w",newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["metric","value"])
-        w.writerow(["total cells", len(full)])
-        w.writerow(["exact", n_exact]); w.writerow(["differs", n_diff]); w.writerow(["missing (one side)", n_missing])
-        w.writerow(["pct exact", round(100*n_exact/max(1,len(full)-n_missing),2)])
-        w.writerow([]); w.writerow(["by stat","exact / differs / missing"])
-        for s,(e,d,m) in sorted(by_stat.items()):
-            w.writerow([s, f"{e} / {d} / {m}"])
+    # ONE review workbook: `summary` tab + `full` tab (with an empty `reason` column
+    # for the reviewer to fill on each flagged cell).
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active; ws.title = "summary"
+    ws.append(["metric", "value"])
+    ws.append(["total cells", len(full)])
+    ws.append(["exact", n_exact])
+    ws.append(["differs", n_diff])
+    ws.append(["missing (one side)", n_missing])
+    ws.append(["pct exact", round(100*n_exact/max(1, len(full)-n_missing), 2)])
+    ws.append(["result", "PASS" if not (n_diff or n_missing) else "REVIEW"])
+    ws.append([])
+    ws.append(["by stat", "exact / differs / missing"])
+    for s, (e, d, m) in sorted(by_stat.items()):
+        ws.append([s, f"{e} / {d} / {m}"])
+    wf = wb.create_sheet("full")
+    wf.append(cols)
+    for r in full:
+        wf.append([r.get(c, "") for c in cols])
+    wb.save(f"{outdir}/comparison_review.xlsx")
 
     print(f"compared {len(full)} cells: {n_exact} exact, {n_diff} differ, {n_missing} missing")
-    print(f"wrote comparison_full.csv and comparison_summary.csv in {outdir}")
+    print(f"wrote comparison_review.xlsx (sheets: summary, full) in {outdir}")
     # Hard-fail (nonzero exit) so a difference cannot be missed by not reading the log.
-    # The CSVs carry the detail; review each flagged cell and record a reason.
     if n_diff or n_missing:
         print(f"FLAG: {n_diff} differing + {n_missing} missing cell(s) need review "
-              f"(see comparison_full.csv)")
+              f"(fill `reason` in the full sheet)")
         sys.exit(1)
     print("OK: every cell reproduces at the reported precision")
 

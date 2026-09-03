@@ -27,18 +27,20 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    national IDs, phone, GPS, exact dates; value labels; variable labels and names;
    dataset label, notes, characteristics; embedded file paths; other files in the
    package). Put `scripts/` on the adopath and call `list_pii_surfaces, stub(<name>)
-   outdir(<dir>)` on a Stata dataset: it writes a per-variable table
-   (`<name>_variables.csv`), a **counts summary** (`<name>_summary.csv`: # string,
-   # numeric, # value-labeled, …), and a free-text dump (`<name>_dump.txt`: value
-   labels, notes, `char`, keyword hits) — results go to files, not the screen. Miss
-   a surface and PII ships even after every string is redacted.
+   outdir(<dir>)` on a Stata dataset: it writes **one review workbook**
+   (`<name>_review.xlsx`: a `summary` tab with counts, and a `variables` tab listing
+   every variable with **empty `is_pii` and `action` columns for the reviewer to
+   fill**), plus a free-text dump (`<name>_dump.txt`: value labels, notes, `char`,
+   keyword hits). Miss a surface and PII ships even after every string is redacted.
 
-2. **Scan string-tail residue (self-contained).** Run
-   `scripts/scan_string_tails.py PATH.dta OUT_DIR` on every data file. It reads the
-   bytes after each string's terminator — invisible to normal reads but present on
-   disk — and writes `string_tails_full.csv` + `string_tails_summary.csv`, exiting
-   nonzero if any residue is found. Residue means a value-level scan is *not* enough
-   and a clean-overwrite (strip-pii) is required.
+2. **Scan string-tail residue (self-contained), into the same workbook.** Run
+   `scripts/scan_string_tails.py PATH.dta OUT_DIR --xlsx=<name>_review.xlsx` on every
+   data file. It reads the bytes after each string's terminator — invisible to
+   normal reads but present on disk — appends a **`string_tails`** tab to the review
+   workbook (per-variable residue counts) and writes the full per-cell dump to a
+   side `string_tails_full.csv` (evidence), exiting nonzero if any residue is found.
+   Residue means a value-level scan is *not* enough and a clean-overwrite (strip-pii)
+   is required.
 
 3. **Run one PII detector — local only, your choice.** Pick a single detector
    appropriate to your tool; **never use anything that uploads data to a third
@@ -55,11 +57,13 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    file). "No original identifier appears anywhere in the released files" is a
    specific proof, not a heuristic — make it the backbone of the *confirm* pass.
 
-5. **Export flags for the user to confirm.** Emit one **flag report**: a full
-   row-level list (surface, file, variable/label/note, why flagged, sample) **and**
-   a summary (counts per surface, # flagged, pass/fail). Deliver it as a simple
-   sheet (CSV/Excel) the user can mark "PII / not PII" per row — that confirmed list
-   is the input to `strip-pii`. Numeric variables especially need human judgment
+5. **Hand the user ONE workbook to confirm.** The `<name>_review.xlsx` from steps
+   1–2 *is* the confirm sheet: its `variables` tab lists every variable with the
+   `is_pii` / `action` columns to fill and the `string_tails` tab flags residue; the
+   `summary` tab gives the counts. The user marks the columns in that single file —
+   that confirmed list is the input to `strip-pii`. (Fold any extra surfaces from
+   the dump, or other files, into the same workbook as more tabs.) Numeric variables
+   especially need human judgment
    (an id vs an analysis value), so present, don't decide.
 
 ## Notes
