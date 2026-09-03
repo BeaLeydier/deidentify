@@ -41,7 +41,7 @@ then run both. Capture results in whichever mode fits:
 First **extract the paper's numbers into a table** — transcribe every printed cell
 once into a CSV with metadata (`key, exhibit, panel/model, row, stat, decimals,
 value`) via a small script that hard-codes each value, so it is checkable and
-re-runnable. Flag tables that are literature summaries with **no producing code**
+re-runnable. Flag tables that are not based on the data and have **no producing code**
 as "not from data". Then compare as below. Comparing to a paper is weaker than
 output-to-output (the paper may be rounded or predate a correction), so document
 any package-vs-paper gap rather than assuming the package is wrong.

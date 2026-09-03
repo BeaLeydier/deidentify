@@ -28,10 +28,11 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    dataset label, notes, characteristics; embedded file paths; other files in the
    package). Put `scripts/` on the adopath and call `list_pii_surfaces, stub(<name>)
    outdir(<dir>)` on a Stata dataset: it writes **one review workbook**
-   (`<name>_review.xlsx`: a `summary` tab with counts, and a `variables` tab listing
+   (`<name>_review.xlsx`) with a `summary` tab (counts), a `variables` tab listing
    every variable with **empty `is_pii` and `action` columns for the reviewer to
-   fill**), plus a free-text dump (`<name>_dump.txt`: value labels, notes, `char`,
-   keyword hits). Miss a surface and PII ships even after every string is redacted.
+   fill**, and an `identifiers` tab (see step 4b), plus a free-text dump
+   (`<name>_dump.txt`: value labels, notes, `char`, keyword hits). Miss a surface and
+   PII ships even after every string is redacted.
 
 2. **Scan string-tail residue (self-contained), into the same workbook.** Run
    `scripts/scan_string_tails.py PATH.dta OUT_DIR --xlsx=<name>_review.xlsx` on every
@@ -52,10 +53,24 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    too — so its output is reviewed, not obeyed.
 
 4. **Cross-reference known identifier values (strongest confirmation).** When the
-   original identifiers are available, search every shipped byte for any original
-   name/id/value (e.g. `strings FILE | grep -Ff known_values.txt`, or grep the raw
-   file). "No original identifier appears anywhere in the released files" is a
+   original, pre-de-identification data is available, search every shipped byte for
+   any original name/id/value: `strings FILE | grep -Ff known_values.txt`, or grep
+   the raw file. "No original identifier appears anywhere in the released files" is a
    specific proof, not a heuristic — make it the backbone of the *confirm* pass.
+   - **Building `known_values.txt` (who/how):** the data owner creates it from the
+     ORIGINAL data — export the distinct values of the confirmed-PII fields and the
+     original id variables, one value per line (in Stata, e.g. `keep <pii/id vars>`,
+     reshape/stack to one column, `export delimited ... , novarnames`). It is the
+     re-identification "watch list"; keep it private, never ship it.
+
+4b. **Identifier / linkage review (FYI, not a flag).** The `identifiers` tab of the
+   review workbook lists variables whose name looks like an id/code/key and any
+   variable that **uniquely identifies rows** (alone, or the id-named set jointly).
+   This is *not* a pass/fail — it is for a human to confirm that the keys shipped in
+   the release belong there and do **not** invite linkage: a unique id (or a
+   combination that is unique) could be merged with an external dataset that still
+   holds PII (checklist item D2). Judge combinations beyond the id-named set by hand;
+   the tab flags the candidates.
 
 5. **Hand the user ONE workbook to confirm.** The `<name>_review.xlsx` from steps
    1–2 *is* the confirm sheet: its `variables` tab lists every variable with the

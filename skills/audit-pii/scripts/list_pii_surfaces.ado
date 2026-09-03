@@ -1,5 +1,5 @@
 *! list_pii_surfaces -- enumerate PII surfaces in the dataset in memory (read-only).
-* Writes ONE review workbook (<stub>_review.xlsx: sheets `summary`, `variables`)
+* Writes ONE review workbook (<stub>_review.xlsx: sheets `summary`, `variables`, `identifiers`)
 * plus a free-text dump (<stub>_dump.txt). The `variables` sheet has empty `is_pii`
 * and `action` columns for the reviewer to fill. Put this dir on the adopath, then:
 *     use "data.dta", clear
@@ -42,6 +42,37 @@ program define list_pii_surfaces, rclass
     }
     file close `V'
 
+    * --- identifier / linkage FYI: id/code-named vars + vars that uniquely identify
+    *     rows (alone, or the id-named set jointly). Not a flag -- for human review of
+    *     whether these keys belong here / risk being merged with an external source. ---
+    tempfile icsv
+    tempname I
+    file open `I' using "`icsv'", write replace
+    file write `I' "variable,name_looks_like_id,uniquely_ids_alone,is_scrambled_pubrep,note" _n
+    local idnamed ""
+    foreach v of varlist _all {
+        local lv = strlower("`v'")
+        local nm = 0
+        if strmatch("`lv'","*id") | strmatch("`lv'","*_id*") | strmatch("`lv'","*code*") ///
+           | strmatch("`lv'","*key*") | strmatch("`lv'","*uuid*") | strmatch("`lv'","*serial*") local nm = 1
+        capture isid `v'
+        local uq = (_rc==0)
+        local pr = strmatch("`lv'","*_pubrep")
+        if `nm' | `uq' {
+            if `nm' local idnamed "`idnamed' `v'"
+            local note = cond(`pr',"scrambled release id", ///
+                cond(`nm' & `uq',"id-name AND unique", cond(`uq',"uniquely identifies rows","id-like name")))
+            file write `I' "`v',`nm',`uq',`pr',`note'" _n
+        }
+    }
+    local jointnote "n/a (no id-named vars)"
+    if "`idnamed'" != "" {
+        capture isid `idnamed'
+        local jointnote = cond(_rc==0,"YES: id-named vars jointly identify rows","no")
+    }
+    file write `I' "(joint id-named key),,,,`jointnote'" _n
+    file close `I'
+
     quietly describe
     local nvars = r(k)
     local nobs  = r(N)
@@ -73,6 +104,9 @@ program define list_pii_surfaces, rclass
     replace metric = "n_variables_with_var_label"   in 7
     replace value  = "`nvarlab'"                     in 7
     export excel using "`outdir'/`stub'_review.xlsx", sheet("summary") sheetreplace firstrow(variables)
+
+    import delimited using "`icsv'", varnames(1) clear stringcols(_all)
+    export excel using "`outdir'/`stub'_review.xlsx", sheet("identifiers") sheetreplace firstrow(variables)
 
     return scalar n_string = `nstr'
     return scalar n_variables = `nvars'
