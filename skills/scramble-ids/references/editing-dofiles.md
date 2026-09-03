@@ -1,9 +1,8 @@
 # Editing a dofile to apply ID renames (Stata)
 
 For rewriting the analysis dofile to use the scrambled `_pubrep` ids, and for the
-verify whole-dataset diff. These are mechanical text-transformation techniques —
-they do **not** assume the code is old (usually it is concurrent, current-Stata
-code being cleaned before publication). If a run does halt on a version issue, the
+verify whole-dataset diff. These are mechanical text-transformation techniques. 
+If a run halts on a Stata version issue, the
 modernization catalogue lives in the **compare-code-results** skill.
 
 ## Read the dofile verbatim (do not let Stata expand it)

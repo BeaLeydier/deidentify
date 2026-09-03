@@ -56,9 +56,9 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    check applies only when you hold the **original, pre-de-identification data**
    (i.e. you are de-identifying, not auditing a dataset in isolation) — so **ask the
    user**: "Is the original (pre-de-identification) data available, and where? Which
-   variables held names / ids / other PII?" If they don't have it, skip this step
+   variables held unique identifiers?" If they don't have it, skip this step
    and rely on 1–3. If they do, **generate the watch list yourself** from the
-   original — do not expect the user to hand you a file:
+   original:
    ```stata
    * known_values.txt = every distinct original PII / id value, one per line
    clear
