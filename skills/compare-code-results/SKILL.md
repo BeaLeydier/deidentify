@@ -74,6 +74,9 @@ need external data the package doesn't ship (obtain and clean it, or document wh
 can't be reproduced and why). A script's internal table numbering is often offset
 from the published numbering — map by content, not label.
 
-## If it's Stata and a run halts
-Consult the runnability catalogue in the **`deidentify:scramble-ids`** skill
-(`references/stata-runnability.md`) — the mechanical old-code→modern fixes.
+## Running the two packages (they may differ)
+The original and cleaned packages often target different Stata versions or were
+written by different people, so a run may need adaptation. `references/running-and-capturing.md`
+covers running Stata headless + reading logs, the mechanical runnability-fix
+catalogue, the verbatim-read for capture instrumentation, and the capture/compare
+gotchas (`gettoken` trim, `tabstat` needs `save`, key-based alignment, …).

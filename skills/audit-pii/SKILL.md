@@ -52,16 +52,36 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    then run it on all files. Treat it as a noisy aid — it flags ordinary content
    too — so its output is reviewed, not obeyed.
 
-4. **Cross-reference known identifier values (strongest confirmation).** When the
-   original, pre-de-identification data is available, search every shipped byte for
-   any original name/id/value: `strings FILE | grep -Ff known_values.txt`, or grep
-   the raw file. "No original identifier appears anywhere in the released files" is a
-   specific proof, not a heuristic — make it the backbone of the *confirm* pass.
-   - **Building `known_values.txt` (who/how):** the data owner creates it from the
-     ORIGINAL data — export the distinct values of the confirmed-PII fields and the
-     original id variables, one value per line (in Stata, e.g. `keep <pii/id vars>`,
-     reshape/stack to one column, `export delimited ... , novarnames`). It is the
-     re-identification "watch list"; keep it private, never ship it.
+4. **Cross-reference original identifier values (strongest confirmation).** This
+   check applies only when you hold the **original, pre-de-identification data**
+   (i.e. you are de-identifying, not auditing a dataset in isolation) — so **ask the
+   user**: "Is the original (pre-de-identification) data available, and where? Which
+   variables held names / ids / other PII?" If they don't have it, skip this step
+   and rely on 1–3. If they do, **generate the watch list yourself** from the
+   original — do not expect the user to hand you a file:
+   ```stata
+   * known_values.txt = every distinct original PII / id value, one per line
+   clear
+   tempfile acc
+   save `acc', emptyok replace
+   foreach v in <pii_and_id_vars> {              // vars the user named
+       use `v' using "<ORIGINAL.dta>", clear
+       rename `v' val
+       tostring val, replace force
+       drop if missing(val) | val==""
+       duplicates drop
+       append using `acc'
+       save `acc', replace
+   }
+   use `acc', clear
+   duplicates drop
+   export delimited using "known_values.txt", novarnames replace
+   ```
+   Then search every shipped byte of the RELEASE for any of them:
+   `strings <release file> | grep -Ff known_values.txt` (repeat per released file).
+   "No original identifier appears anywhere in the released files" is a specific
+   proof, not a heuristic — make it the backbone of the *confirm* pass. The watch
+   list is a re-identification key: keep it private, never ship it.
 
 4b. **Identifier / linkage review (FYI, not a flag).** The `identifiers` tab of the
    review workbook lists variables whose name looks like an id/code/key and any

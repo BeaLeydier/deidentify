@@ -60,11 +60,11 @@ edit per package.
 4. **Update the analysis code — flag, then apply.** Scan the analysis script and
    export every line that references an ID *variable* or a hardcoded ID *value*
    (`if hhid==149`) to a review sheet (`lineno, original, proposed`) for the user
-   before rewriting. Match ID names on word boundaries treating `_` as a word
-   char (so `groupid` doesn't match inside `sub_groupid`). Then apply the renames
-   into the release copy, plus mechanical runnability fixes so old code runs on a
-   current version — see `references/stata-runnability.md` (also covers two real
-   traps when editing a dofile programmatically).
+   before rewriting. Then apply the renames into the release copy. The rename is a
+   pure relabel — **do not assume the code is old or needs modernizing**; before
+   publication it is usually concurrent, current-Stata code that runs as-is. See
+   `references/editing-dofiles.md` for the mechanics (read verbatim with Mata
+   `cat()`, match ID names on `_`-aware word boundaries, write literal `$`/`"`).
 
 5. **Verify — fail-loud, to one workbook.** Copy and adapt
    `scripts/verify_scramble.do` (a template — the datasets/keys/composite keys are
@@ -80,9 +80,11 @@ edit per package.
    the `result` cell — **not** the process exit code, because Stata batch returns 0
    even on `exit 459` (that `exit` still halts an in-Stata do-file chain).
 
-6. **Smoke-test the run.** Run the updated package end-to-end once to confirm it
-   still executes after the ID swap (fix runnability halts via the reference).
-   This is an "it runs" check; the numeric proof is `compare-code-results`.
+6. **Smoke-test the run.** Run the updated package end-to-end once
+   (`stata-se -b do <master>.do`) to confirm it still executes after the ID swap.
+   Concurrent code usually runs unchanged; in the rare case a run halts on a Stata
+   version issue, the modernization catalogue lives in the **`deidentify:compare-code-results`**
+   skill. This is an "it runs" check; the numeric proof is `compare-code-results`.
 
 ## Output convention
 Every export is systematic: the full ID-reference review sheet and the full
