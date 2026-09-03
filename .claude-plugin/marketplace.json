@@ -1,0 +1,17 @@
+{
+  "name": "deidentify-marketplace",
+  "displayName": "De-identification skills",
+  "description": "Skills for de-identifying research replication packages and verifying reproducibility.",
+  "plugins": [
+    {
+      "name": "deidentify",
+      "displayName": "Replication de-identification suite",
+      "description": "Audit/strip PII, scramble IDs, minimize variables, and compare replication results.",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/CHANGE-ME/deidentify-skills",
+        "ref": "main"
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# OS / editor cruft
+.DS_Store
+*~
+.*.swp
+
+# generated run artifacts (skills produce these at use time; never commit)
+*.log
+*.dta
+*.csv
+*.xlsx
+!**/references/*.csv
+
+# never commit real data or audit outputs
+work/
+*_report.csv
+*_summary.csv
+comparison_*.csv
+string_tails_*.csv
