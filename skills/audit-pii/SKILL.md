@@ -26,9 +26,12 @@ place. It has two jobs: **discover** what must be removed (before stripping), an
    in `references/pii-surfaces.md` (string values; PII-bearing numerics like
    national IDs, phone, GPS, exact dates; value labels; variable labels and names;
    dataset label, notes, characteristics; embedded file paths; other files in the
-   package). `scripts/list_pii_surfaces.do` dumps these for a Stata dataset
-   (string vars, value labels, notes, `char`, `lookfor` on names+labels) into a
-   report. Miss a surface and PII ships even after every string is redacted.
+   package). Put `scripts/` on the adopath and call `list_pii_surfaces, stub(<name>)
+   outdir(<dir>)` on a Stata dataset: it writes a per-variable table
+   (`<name>_variables.csv`), a **counts summary** (`<name>_summary.csv`: # string,
+   # numeric, # value-labeled, …), and a free-text dump (`<name>_dump.txt`: value
+   labels, notes, `char`, keyword hits) — results go to files, not the screen. Miss
+   a surface and PII ships even after every string is redacted.
 
 2. **Scan string-tail residue (self-contained).** Run
    `scripts/scan_string_tails.py PATH.dta OUT_DIR` on every data file. It reads the

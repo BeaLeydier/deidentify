@@ -85,8 +85,13 @@ def main():
 
     print(f"compared {len(full)} cells: {n_exact} exact, {n_diff} differ, {n_missing} missing")
     print(f"wrote comparison_full.csv and comparison_summary.csv in {outdir}")
+    # Hard-fail (nonzero exit) so a difference cannot be missed by not reading the log.
+    # The CSVs carry the detail; review each flagged cell and record a reason.
     if n_diff or n_missing:
-        print(f"REVIEW: {n_diff} differing + {n_missing} missing cell(s) -- add a reason to each in comparison_full.csv")
+        print(f"FLAG: {n_diff} differing + {n_missing} missing cell(s) need review "
+              f"(see comparison_full.csv)")
+        sys.exit(1)
+    print("OK: every cell reproduces at the reported precision")
 
 if __name__ == "__main__":
     main()

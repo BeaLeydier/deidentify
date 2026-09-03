@@ -1,19 +1,19 @@
 ---
-name: replication-package
+name: code-package
 description: >-
-  Orchestrate de-identification of a research replication package for public
+  Orchestrate de-identification of a research code package for public
   release, then prove the cleaned package still reproduces its results. Use when
-  someone wants to anonymize / de-identify / scramble IDs in a replication
-  package or dataset, remove PII before sharing data, prepare replication files
+  someone wants to anonymize / de-identify / scramble IDs in a code
+  package or dataset, remove PII before sharing data, prepare code files
   for a journal or repository (AEA, ICPSR, Dataverse, OSF), or verify that a
   cleaned package still reproduces published tables and figures. This is the
   top-level workflow; it sequences five focused skills (audit-pii, strip-pii,
-  scramble-ids, minimize-variables, compare-replication-results) and handles
+  scramble-ids, minimize-variables, compare-code-results) and handles
   package mapping and release packaging around them. Examples are shown in Stata
   (.do/.dta); the method is language-agnostic (R/Python/SAS apply the same way).
 ---
 
-# De-identify a replication package (orchestrator)
+# De-identify a code package (orchestrator)
 
 Goal: produce a public package that (a) contains no re-identifying information
 and (b) still reproduces every result. The invariant that makes this safe:
@@ -63,7 +63,7 @@ Build a shared picture before touching anything:
    analysis code to the new IDs, and smoke-test that the package still runs.
 4. **Minimize variables** → invoke **`deidentify:minimize-variables`**. Keep only variables
    the code uses; report what was dropped per dataset.
-5. **Compare results** → invoke **`deidentify:compare-replication-results`**. Run the cleaned
+5. **Compare results** → invoke **`deidentify:compare-code-results`**. Run the cleaned
    package and compare every estimate against the original package's output and/or
    the paper, with a full side-by-side table plus a summary.
 
@@ -71,10 +71,10 @@ Build a shared picture before touching anything:
 
 - **Ship clean:** delete generated outputs (figures, intermediates, logs) so the
   public package is inputs + code + readme + bundled dependencies only.
-- **Public replication readme** (inside `<pkg>_deid/`): written for someone
+- **Public code readme** (inside `<pkg>_deid/`): written for someone
   reproducing the results from this package — data, code, how to run, dependencies,
   expected outputs. Mention de-identification only in one line ("IDs are
-  anonymized"); it should read like a normal replication package, not a redaction
+  anonymized"); it should read like a normal code package, not a redaction
   log.
 - **Private processing readme** (with the processing code, never shipped): the
   full audit trail — what counted as PII and how each field was handled, the
@@ -83,6 +83,14 @@ Build a shared picture before touching anything:
 
 ## Output convention (applies to every skill here)
 
-Every report is **systematic**: a complete row-level table (every variable /
-estimate / flag, nothing pre-filtered) **and** a summary block (counts, % differing,
-# flagged, pass/fail). Eyeball-able and summarizable, both.
+Assume **no one reads the log**. Every result lands in a **file**, in two forms: a
+complete row-level table (every variable / estimate / flag, nothing pre-filtered)
+**and** a summary CSV (counts, % differing, # flagged, `result` PASS/FAIL). Screen
+output stays only as documentation to fold into the readme.
+
+**Fail detection contract:** a check that should be flagged fails *hard* — Python
+tools **exit nonzero**; Stata programs write a `result,FAIL` row and drop a
+`*_FAILED.flag` sentinel (Stata batch always returns OS exit 0, so never rely on
+its exit code — the sentinel / `result` column is the signal, and `exit 459` still
+halts an in-Stata do-file chain). Check the sentinel or the summary's `result`, not
+the log.

@@ -1,7 +1,7 @@
-# deidentify — replication de-identification skills
+# deidentify — code de-identification skills
 
 A Claude Code plugin: a suite of focused skills for de-identifying research
-replication packages and datasets, and for proving a cleaned package still
+code packages and datasets, and for proving a cleaned package still
 reproduces its results. Skills are language-agnostic in method; examples are shown
 in Stata (`.do`/`.dta`).
 
@@ -9,12 +9,12 @@ in Stata (`.do`/`.dta`).
 
 | Skill | Invoke as | Purpose |
 |---|---|---|
-| Orchestrator | `/deidentify:replication-package` | Maps the package and sequences the five skills below, then ships clean + writes the two readmes. |
+| Orchestrator | `/deidentify:code-package` | Maps the package and sequences the five skills below, then ships clean + writes the two readmes. |
 | Audit PII | `/deidentify:audit-pii` | Detect direct PII across all surfaces (values, PII numerics, value labels, variable labels/names, notes/characteristics, hidden string-tail bytes, other files); export a flag report. Read-only. |
 | Strip PII | `/deidentify:strip-pii` | Drop or overwrite confirmed PII with a clean overwrite (no residual "ghost tail"). |
 | Scramble IDs | `/deidentify:scramble-ids` | Seeded 1-to-1 ID correspondence tables (kept private), code update, fail-loud verification. |
 | Minimize variables | `/deidentify:minimize-variables` | Keep only variables the code uses; report what was dropped per dataset. |
-| Compare results | `/deidentify:compare-replication-results` | Compare every estimate side-by-side vs the original package and/or a paper, full table + summary. |
+| Compare results | `/deidentify:compare-code-results` | Compare every estimate side-by-side vs the original package and/or a paper, full table + summary. |
 
 Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.

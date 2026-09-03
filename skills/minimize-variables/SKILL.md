@@ -22,9 +22,11 @@ re-running.
 
 1. **Build the keep-list from ALL code, not just the analysis file.** A variable
    may exist only to build another, so scan construction/cleaning scripts too.
-   `scripts/find_used_variables.do` tokenizes every script and, per dataset, marks
-   which variables appear (by exact name or a `stub*` wildcard the code uses) and
-   writes a review CSV. It is deliberately **conservative — when unsure, keep**.
+   Put `scripts/` on the adopath and call `find_used_variables, dofiles("<a.do
+   b.do>") datasets("<x.dta y.dta>") outdir(<dir>) alwayskeep("<id patterns>")`. It
+   tokenizes every script and, per dataset, writes a review CSV (`varusage_<name>.csv`:
+   each variable marked used/how) plus a `varusage_summary.csv` (kept vs candidates
+   to drop per dataset). It is deliberately **conservative — when unsure, keep**.
 
 2. **Always keep the structural variables** even if they look unused: ID variables
    (and their scrambled versions) and anything needed to **merge, sort, or set a
@@ -37,7 +39,7 @@ re-running.
 
 4. **Confirm by re-running.** The real test is the full run: if the keep-list is
    wrong, the package errors on a missing variable. A clean end-to-end run (and an
-   unchanged `compare-replication-results` result) is the proof that minimization
+   unchanged `compare-code-results` result) is the proof that minimization
    broke nothing.
 
 ## Output convention (systematic report)

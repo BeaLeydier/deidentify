@@ -29,17 +29,18 @@ either drop the field or overwrite the whole slot.
    default to propose: drop free-text/rare fields; overwrite where a column must
    stay for the code or structure.
 
-2. **Apply with a clean overwrite (no ghost tail).** See
-   `scripts/redact_and_clean.do`. The safe options, in order:
-   - **Drop** the variable — no bytes remain. Simplest and safest when the column
+2. **Apply with a clean overwrite (no ghost tail).** Put `scripts/` on the adopath
+   and call the `redact_clean` program — `redact_clean <var>,
+   method(drop|fullwidth|rebuild) [placeholder() newlen()] report(<csv>)` — which
+   applies one of the safe methods and appends the action to a report CSV:
+   - **`drop`** the variable — no bytes remain. Simplest and safest when the column
      is not needed by the code.
-   - **Full-width constant** — set every cell to a placeholder of a fixed length
-     and shrink the storage to exactly that length, so there is no terminator and
-     no tail (e.g. all cells `"REDACTED"`, then recast to that width).
-   - **Rebuild on clean memory** — when values must vary, copy into a freshly
-     created (zero-initialised) variable and drop the original, so tails are zero.
-   A bare `replace` alone is NOT sufficient — it leaves residue. (Verify: `compress`,
-   `recast`, `strtrim`, and copy-into-an-existing-var all preserve the tail.)
+   - **`fullwidth`** — set every cell to a placeholder and recast storage to its
+     exact length, so there is no terminator and no tail.
+   - **`rebuild`** — when values must vary, copy into a freshly created
+     (zero-initialised) `str` variable and drop the original, so tails are zero.
+   All three are residue-free by construction. A bare `replace` is NOT — it leaves
+   residue (as do `compress`, `recast`, `strtrim`, and copy-into-an-existing-var).
 
 3. **Strip the non-value surfaces too.** PII also lives in metadata (see
    audit-pii): drop identifying **value labels** (`label drop`), clear identifying

@@ -1,7 +1,7 @@
 ---
-name: compare-replication-results
+name: compare-code-results
 description: >-
-  Verify that a cleaned/rebuilt replication package still reproduces results, by
+  Verify that a cleaned/rebuilt code package still reproduces results, by
   comparing every estimate side-by-side against an original package's output
   and/or a published paper, with a full table plus summary statistics on how many
   match and differ. Use when someone wants to check a de-identified or modified
@@ -12,7 +12,7 @@ description: >-
   language-agnostic.
 ---
 
-# Compare replication results systematically
+# Compare code results systematically
 
 Confirm the cleaned package reproduces results. Two comparisons, both producing a
 full side-by-side table **and** a summary — never just a headline check.
