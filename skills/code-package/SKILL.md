@@ -40,13 +40,22 @@ Build a shared picture before touching anything:
   (if it writes tables/logs), else the **published paper**. Check whether the
   analysis code saves results at all — many older packages only print to a log.
 - **Folder layout.** Keep the re-identification key separate from, and never
-  shipped in, the public package:
+  shipped in, the public package; work on a **copy** of the package, never on
+  the audited folder, and take a SHA-256 manifest of every source folder before
+  and after (identical manifests are the proof). `references/deliverable-layout.md`
+  gives the deliverable/code-folder layout, the report skeleton and the defects
+  met in practice. Below is an example structure for the deidentification folder. You may have a different one in each use case, but this is a reference point for information.
   ```
   <root>/            paper (if any) + top-level notes
   <pkg>_orig/        original package, never modified
   <pkg>_deid/        PUBLIC package (data, code, readme, bundled deps)
-  work/              processing code, ID key tables (PRIVATE), audit reports, logs
+  <pkg>-deliverable/ report, code/ (every step as a reviewable script), subfolders for each skill, for example: audit/, minimize/, scramble/, strip/, compare. Also add logs/, run/ (the executed copy)
+  scratch/           PRIVATE: watch lists of original ids, crosswalk exports
   ```
+- **Reachable code only.** Which do-files does the master actually run? Calls
+  commented out of the master (GPS steps, R steps) and dead scripts must not
+  count as uses. Which data is study data? Example datasets inside third-party
+  `ado/` packages are excluded from every audit count.
 
 ## The pipeline
 
@@ -62,15 +71,23 @@ Build a shared picture before touching anything:
    correspondence tables (kept private), apply them, verify fail-loud, update the
    analysis code to the new IDs, and smoke-test that the package still runs.
 4. **Minimize variables** → invoke **`deidentify:minimize-variables`**. Keep only variables
-   the code uses; report what was dropped per dataset.
+   the reachable code uses, in two rounds (unreferenced; wildcard-only never
+   computed with), each proven by re-running the package and comparing every
+   output file with a pre-drop snapshot. Do this **before** the confirm audit, so
+   the PII shortlist is as short as it can be.
 5. **Compare results** → invoke **`deidentify:compare-code-results`**. Run the cleaned
    package and compare every estimate against the original package's output and/or
-   the paper, with a full side-by-side table plus a summary.
+   the paper — tables, appendix, in-text numbers, figures (same-machine
+   rendering) — into one comparison workbook with a summary.
+6. **Confirm audit** → `deidentify:audit-pii` again on the minimised, scrambled
+   data: classifier shortlist, surfaces summary, residue, identifier leak tests.
 
 ## Finish — ship clean, and write two readmes
 
 - **Ship clean:** delete generated outputs (figures, intermediates, logs) so the
-  public package is inputs + code + readme + bundled dependencies only.
+  public package is inputs + code + readme + bundled dependencies only. Tidy the
+  deliverable too: workbooks and hand-transcribed inputs at the top level,
+  intermediates in `_intermediate/`, superseded files deleted.
 - **Public code readme** (inside `<pkg>_deid/`): written for someone
   reproducing the results from this package — data, code, how to run, dependencies,
   expected outputs. Mention de-identification only in one line ("IDs are

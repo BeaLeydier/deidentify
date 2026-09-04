@@ -41,3 +41,15 @@ could be merged with another data source of the same individuals where pii may b
 
 Out of scope here: statistical / combination-based re-identification (k-anonymity,
 l-diversity). This checklist is direct disclosure only.
+
+## Notes from practice
+- **B4 at scale.** Survey packages can carry narrative notes copied
+  into most files (thousands of notes, hundreds of thousands of characters) and
+  tens of thousands of machine-generated characteristics from `reshape`/`xi`/
+  `tsset` (`ReS_*`, `__xi__*`, `_TS*`). Count the two kinds separately; check
+  whether any do-file reads notes/characteristics — usually none does, so they
+  can be removed without touching code.
+- **B1 false hits.** A direct-term search on value labels catches "Pre-**Cast**ed",
+  "**Name** Change", "**Birth** certificate"; list them, let the reviewer dismiss.
+- **A1 noise sources.** Interview times (`hh:mm`), counts, amounts
+  and answer codes are numbers in disguise; the classifier routes them to `other`.

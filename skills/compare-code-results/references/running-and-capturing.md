@@ -71,3 +71,18 @@ Then insert `post` lines after matched estimation lines and write the file out w
   between opening the postfile and the last `post`.
 - **Align by the shared key, never by row position (`_n`).** Every `merge`
   re-sorts, so `_n`-alignment compares unrelated rows.
+
+
+## Why two runs of the same code can differ: checklist for the `reason` column
+1. Rounding boundary (value sits at .xxx5).
+2. Stata or user-written package version (record `which <cmd>` output for both runs).
+3. A correction documented in the package's change log (read it first).
+4. **Sort-order / id-magnitude dependence** after ids were scrambled: order-dependent
+   estimators (UJIVE, resampling with `set seed` after a `sort`), `if id > k` cutoffs,
+   `egen group(id)` / `tab id, gen()` numbering, `_n`/`[1]`/`duplicates drop` after
+   `sort id`, `sample`. Diagnose with `scramble-ids/scripts/scan_id_order_dependence.py`;
+   the fix belongs in the code or the map bands, never in an order-preserving map.
+5. Tie-breaking without `set sortseed` (results differ run to run, not only package
+   to package).
+6. An adaptation made to run the package (path fix, replaced command, skipped step).
+7. Genuine data difference (a dropped variable that was used; a changed merge).

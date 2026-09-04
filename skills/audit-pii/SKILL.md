@@ -2,111 +2,125 @@
 name: audit-pii
 description: >-
   Systematically detect direct personally-identifying information in a dataset or
-  a folder of data files, and export a flag report to confirm with a human. Use
-  when someone wants to check/scan/audit data for PII, find personal information
-  in variables, confirm a dataset has no identifiers before sharing, or verify
-  that a de-identified file is actually clean. Covers surfaces a value-scan misses:
-  value labels, variable labels/names, dataset notes and characteristics, and the
-  hidden residual bytes stored after a string's terminator. Read-only (it detects,
-  it does not modify) -- run it to decide what to remove, and again afterward to
-  confirm removal. Scope is DIRECT disclosure only (a value that is itself
-  identifying), not statistical/re-identification risk. Examples are in Stata
-  (.do/.dta); the method is language-agnostic.
+  a folder of data files, and export ONE review workbook for a human to confirm.
+  Use when someone wants to check/scan/audit data for PII, find personal
+  information in variables, confirm a dataset has no identifiers before sharing,
+  or verify that a de-identified file is actually clean. Covers surfaces a
+  value-scan misses: value labels, variable labels/names, dataset notes and
+  characteristics, the hidden residual bytes after a string's terminator, and --
+  when private id crosswalks exist -- proves no original identifier survives.
+  Read-only (it detects, it does not modify): run it to decide what to remove,
+  and again afterward to confirm removal. Scope is DIRECT disclosure only (a value
+  that is itself identifying), not statistical/re-identification risk. Examples
+  are in Stata (.do/.dta); the method is language-agnostic.
 ---
 
 # Audit a dataset for direct PII
 
 Read-only detection of information that directly identifies a person/household/
-place. It has two jobs: **discover** what must be removed (before stripping), and
-**confirm** nothing remains (after). It does not change data.
+place. Two jobs: **discover** what must be removed (before stripping), and
+**confirm** nothing remains (after). It never changes data, and everything it
+finds lands in **one review workbook** whose PII verdicts are *indicative* — a
+person decides, in the `is_pii` / `action` columns.
+
+Scope the audit to **study data only**: example datasets shipped inside
+third-party `ado/` packages (`florentine.dta`, `auto.dta`, …) are not the
+package's data and only add noise — exclude `ado/` from every file list and
+every count, and say so in the report.
 
 ## Steps
 
-1. **Enumerate every PII surface — not just cell values.** Walk the full checklist
-   in `references/pii-surfaces.md` (string values; PII-bearing numerics like
-   national IDs, phone, GPS, exact dates; value labels; variable labels and names;
-   dataset label, notes, characteristics; embedded file paths; other files in the
-   package). Put `scripts/` on the adopath and call `list_pii_surfaces, stub(<name>)
-   outdir(<dir>)` on a Stata dataset: it writes **one review workbook**
-   (`<name>_review.xlsx`) with a `summary` tab (counts), a `variables` tab listing
-   every variable with **empty `is_pii` and `action` columns for the reviewer to
-   fill**, and an `identifiers` tab (see step 4b), plus a free-text dump
-   (`<name>_dump.txt`: value labels, notes, `char`, keyword hits). Miss a surface and
-   PII ships even after every string is redacted.
+1. **Enumerate every PII surface — not just cell values.** Walk the checklist in
+   `references/pii-surfaces.md`. Put `scripts/` on the adopath and call
+   `list_pii_surfaces, stub(<name>) outdir(<dir>)` on each dataset: per-dataset
+   workbook (`variables`, `identifiers`, `summary` tabs) plus a free-text dump of
+   value labels, notes and `char`. Then run `scripts/pii_surfaces_summary.do`
+   (a template: set `$DATADIR $DTALIST $OUTDIR $CODEDIR`) for summary statistics on these
+   other potential places for pii (allowing the human reviewer to decide whether to keep, drop, or investigate further): per dataset, the number and size of notes (full text exported to `dataset_notes.csv`), characteristics (machine-generated reshape/xi/tsset bookkeeping told apart from hand-written
+   ones), value-label sets and entries with entries flagged for a direct term or
+   long free text (`value_label_flags.csv`), variable labels with a direct term — and **whether any do-file reads notes or characteristics**
+   (`notes_readers.txt`; if none does, notes can be removed without touching code).
+   Narrative notes are free text and therefore a disclosure risk even when
+   eyeballing finds nothing; report their amount and let the PIs decide.
 
-2. **Scan string-tail residue (self-contained), into the same workbook.** Run
-   `scripts/scan_string_tails.py PATH.dta OUT_DIR --xlsx=<name>_review.xlsx` on every
-   data file. It reads the bytes after each string's terminator — invisible to
-   normal reads but present on disk — appends a **`string_tails`** tab to the review
-   workbook (per-variable residue counts) and writes the full per-cell dump to a
-   side `string_tails_full.csv` (evidence), exiting nonzero if any residue is found.
-   Residue means a value-level scan is *not* enough and a clean-overwrite (strip-pii)
-   is required.
+2. **Scan string-tail residue (self-contained).** Run
+   `scripts/scan_string_tails.py PATH.dta OUT_DIR` on every data file (give each
+   file its own OUT_DIR — the script writes a fixed file name). It reads the bytes
+   after each string's terminator — invisible to normal reads, present on disk —
+   and exits nonzero on residue. Residue means a value-level scan is *not* enough
+   and a clean overwrite (strip-pii) is required.
 
-3. **Run one PII detector — local only, your choice.** Pick a single detector
-   appropriate to your tool; **never use anything that uploads data to a third
-   party** (no cloud DLP/API). Options, all run locally: **Stata** `pii_scan`;
-   **Python** `presidio-analyzer`, `scrubadub`, or a regex battery
-   (email/phone/national-ID/GPS-range); **R** a regex/`stringr` battery. Ask the
-   user which one to implement (default to the native tool for the language in use),
-   then run it on all files. Treat it as a noisy aid — it flags ordinary content
-   too — so its output is reviewed, not obeyed.
+3. **Classify every variable with `pii_classify` (same logic as `pii_scan`, but with more details).** Put
+   `scripts/` on the adopath; per dataset:
+   `pii_classify, out(<csv>) dataset(<label>) idkeys("<id glob list>") [append]`.
+   One row per variable with `category` = `identifier` / `likely_pii` / `other`,
+   the `reason`, `redaction_status` (content / single value / placeholder / missing
+   code / empty), four sample values, and `keyword_hit`. The rules, agreed with PIs
+   who reviewed the earlier, far noisier output:
+   - identifier keys (`idkeys()`) → `identifier`, their own tab, never PII candidates;
+   - a direct-identifier term in name or label (name, dob/birth, address,
+     phone/contact/mobile, national id/cnic, gps/latitude/longitude/coord, email,
+     caste), a lat/lon **pair** of adjacent variables, or value labels that read
+     like free text / mention a direct term → `likely_pii`;
+   - byte and numeric variables, strings holding numbers, time slots (`hh:mm`),
+     strings whose label says count/amount/score, strings without content → `other`;
+   - remaining strings **with content** → `likely_pii`. 
+   - `keyword_hit` carries `pii_scan`'s broad list (school, village, child, house,
+     …) as information only; the `other_variables` tab is sorted so those rows come
+     first. The keyword alone is not a criterion to be considered likely pii on its own.
+   Never use a detector that uploads data to a third party. If `pii_classify` is not enough, other tools can be used (for example, `pii_scan` though it is in theory less complete than `pii_classify`). Note on `pii_scan` if it is used as a cross-check: it is not on SSC (J-PAL GitHub), writes malformed CSV rows for free text containing quotes/semicolons, and leaks tempvars until it hits Stata's 5,000-variable ceiling on wide files (`set maxvar 32767`).
 
-4. **Cross-reference original identifier values (strongest confirmation).** This
-   check applies only when you hold the **original, pre-de-identification data**
-   (i.e. you are de-identifying, not auditing a dataset in isolation) — so **ask the
-   user**: "Is the original (pre-de-identification) data available, and where? Which
-   variables held unique identifiers?" If they don't have it, skip this step
-   and rely on 1–3. If they do, **generate the watch list yourself** from the
-   original:
-   ```stata
-   * known_values.txt = every distinct original PII / id value, one per line
-   clear
-   tempfile acc
-   save `acc', emptyok replace
-   foreach v in <pii_and_id_vars> {              // vars the user named
-       use `v' using "<ORIGINAL.dta>", clear
-       rename `v' val
-       tostring val, replace force
-       drop if missing(val) | val==""
-       duplicates drop
-       append using `acc'
-       save `acc', replace
-   }
-   use `acc', clear
-   duplicates drop
-   export delimited using "known_values.txt", novarnames replace
-   ```
-   Then search every shipped byte of the RELEASE for any of them:
-   `strings <release file> | grep -Ff known_values.txt` (repeat per released file).
-   "No original identifier appears anywhere in the released files" is a specific
-   proof, not a heuristic — make it the backbone of the *confirm* pass. The watch
-   list is a re-identification key: keep it private, never ship it.
+4. **Prove no original identifier survives (when crosswalks exist).** Ask whether
+   the old→new id crosswalks (from `scramble-ids`) are available; without them,
+   rely on 1–3 and say so. With them, run `scripts/id_leak_tests.do` (a template:
+   globals for data, crosswalk folder, id families and their crosswalk columns):
+   - **Which variables are identifiers.** A variable whose *name* carries a family
+     word is a *candidate*; it is kept as an identifier only if numeric with more
+     than two distinct values. 0/1 indicators that merely mention an id  keyword
+     are content, not ids — list them as excluded, keep them out of the tests. Export the kept list.
+   - **Watch lists.** Per family, from the crosswalk: ALL OLD, ALL NEW, and
+     OLD-ONLY (old ids that are never a legal new value). Report the sizes: the
+     **overlap** says how informative the test is. A width-preserving scramble can
+     make 80 % of old ids legal new values; then a single value cannot be told
+     apart and the test is read in aggregate. The same table reports the
+     **rank retention** of each map — Spearman ρ between old and new over the
+     crosswalk: ≈ 0 for a random relabel, ≈ 1 for an order-preserving map, which
+     anyone holding the original ids reverses with one sort. Report a high ρ as a
+     weakness of the release, not a pass. Keep the lists private — they are a
+     re-identification key.
+   - **Test 1, membership**, per identifier variable over *distinct values*:
+     `n_outside_image` (not a legal new id; must be 0 unless the variable is a
+     derived id whose rule you then verify row by row) and `n_in_old_only` (provably
+     an old id; must be 0). Show `expected_hits_if_unscrambled` = n_distinct ×
+     share old-only beside the observed count — "0 observed against 25,400
+     expected" is the argument for families with a large overlap.
+   - **Test 2, old id elsewhere in the row, column-wise**: recover each row's old
+     id through the crosswalk (new → old) and compare every other column with it;
+     flag a column equal on ≥ 99 % of its non-missing rows *and* on ≥ 10 rows — an
+     `old_id` column kept by mistake, or a composite that embeds it. Expect many
+     columns with one or two coincidental equalities; they are noise.
+   - **Text files** (do, csv, txt, tex, log …; not binary): whole-token search for
+     old-only ids, distinctive (≥ 5 digits) hits reported separately from
+     two-to-four-digit ambient numbers. `.dta` are binary — that is what test 1
+     is for; `strings | grep` on them is noise.
 
-4b. **Identifier / linkage review (FYI, not a flag).** The `identifiers` tab of the
-   review workbook lists variables whose name looks like an id/code/key and any
-   variable that **uniquely identifies rows** (alone, or the id-named set jointly).
-   This is *not* a pass/fail — it is for a human to confirm that the keys shipped in
-   the release belong there and do **not** invite linkage: a unique id (or a
-   combination that is unique) could be merged with an external dataset that still
-   holds PII (checklist item D2). Judge combinations beyond the id-named set by hand;
-   the tab flags the candidates.
-
-5. **Hand the user ONE workbook to confirm.** The `<name>_review.xlsx` from steps
-   1–2 *is* the confirm sheet: its `variables` tab lists every variable with the
-   `is_pii` / `action` columns to fill and the `string_tails` tab flags residue; the
-   `summary` tab gives the counts. The user marks the columns in that single file —
-   that confirmed list is the input to `strip-pii`. (Fold any extra surfaces from
-   the dump, or other files, into the same workbook as more tabs.) Numeric variables
-   especially need human judgment
-   (an id vs an analysis value), so present, don't decide.
+5. **Hand the user ONE workbook.** Assemble the CSVs into a single review workbook
+   (see `code-package` for the builder pattern): `README` (how to read each tab),
+   `summary`, `likely_pii` (highest risk first, `is_pii`/`action` to fill),
+   `other_variables`, `identifiers`, `pii_surfaces`, `dataset_notes`,
+   `value_label_flags`, `id_watchlist_sizes`, `id_crossref_numeric` (with a
+   plain-language `verdict`), `id_crossref_string`, `id_mergeback_rowtest`,
+   `string_tails`. In the report, describe the PII shortlist as *indicative* and
+   point to the tab; state plainly what is proven (identifiers, residue) and what
+   needs judgement (free text).
 
 ## Notes
 
-- **Direct disclosure only.** Flag values that *are* identifying. Do not attempt
-  k-anonymity / combination-based re-identification risk here.
-- **Run twice.** Once to build the strip list; once after strip-pii + scramble-ids
-  to confirm the released files are clean (surfaces enumerated, tails clean,
-  detector clear, no known value found).
+- **Direct disclosure only.** Do not attempt k-anonymity here.
+- **Run twice.** Once to build the strip list; once after strip-pii, scramble-ids
+  and minimize-variables to confirm the released files are clean — on the
+  *minimised* data, so the shortlist is as short as it can be.
+- **Author/RA names and file paths** are usually not PII (they are publicly
+  attached to the paper, and root paths are expected to be edited per machine).
 - **Other file types.** Apply the same value/label/metadata checks to CSV/Excel/
-  text; for images/PDFs check embedded metadata (e.g. `exiftool` for EXIF/GPS/author).
+  text; for images/PDFs check embedded metadata (e.g. `exiftool`).

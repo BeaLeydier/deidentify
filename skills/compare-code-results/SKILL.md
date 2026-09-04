@@ -6,77 +6,99 @@ description: >-
   and/or a published paper, with a full table plus summary statistics on how many
   match and differ. Use when someone wants to check a de-identified or modified
   package reproduces the original, compare two sets of regression results, verify
-  outputs against a paper's tables, or diff coefficients/standard-errors/p-values
-  across package versions. Covers extracting a paper's numbers from a PDF into a
-  table first, then comparing. Examples are in Stata (.do/.dta); the method is
-  language-agnostic.
+  outputs against a paper's tables, in-text numbers or figures, or diff
+  coefficients/standard-errors/p-values across package versions. Covers extracting
+  a paper's numbers from a PDF into a table first, then comparing. Examples are in
+  Stata (.do/.dta); the method is language-agnostic.
 ---
 
 # Compare code results systematically
 
-Confirm the cleaned package reproduces results. Two comparisons, both producing a
-full side-by-side table **and** a summary — never just a headline check.
+Confirm the cleaned package reproduces results. Every comparison produces a
+full side-by-side table **and** a summary — never just a headline check — and all
+of them end up in **one comparison workbook** (tabs: summary, tables, appendix,
+in-text, figures, before-vs-after).
 
 ## Get the numbers out of each package
 
 Ask the user for the **old/original** package folder and the **new/cleaned** one,
-then run both. Capture results in whichever mode fits:
+then run both (on copies — never edit a package in place; log every edit needed
+to make it run as a diff). Capture results in whichever mode fits:
 
 - **Output-to-output (preferred).** If the package *saves* its results —
   `.tex`/`.csv`/`.txt` tables, saved matrices/estimates, logs — run both packages
-  and **diff the output files directly**. A clean rebuild should make them
-  identical apart from any renamed ids. No transcription, no re-derivation.
+  and **diff the output files directly**. Normalise Windows line endings first: a
+  reference built on Windows differs from a macOS run in every line by CRLF alone
+  and is otherwise byte-identical. A clean rebuild should be identical apart from
+  renamed ids.
 - **Capture-from-commands (when results aren't saved, or aren't text).** Many
-  packages only print to a log. Then instrument the analysis script **verbatim**:
-  insert lines after each estimation that write that command's own results
-  (coefficients, SEs, p-values, N, R², test stats) to a table — see
-  `scripts/capture_estimates.md`. Do **not** re-implement the estimations in your
-  own reorganized code; you would be testing your code, not the package. Generate
-  the instrumented copy programmatically from the real script so it is provably
-  "the script + saves", and re-issue any display-only result's exact internal
-  computation to capture it.
+  packages only print to a log. Instrument the analysis script **verbatim** —
+  see `scripts/capture_estimates.md`. Do **not** re-implement the estimations.
 
 ## Compare against a published paper (if one exists)
 
-First **extract the paper's numbers into a table** — transcribe every printed cell
-once into a CSV with metadata (`key, exhibit, panel/model, row, stat, decimals,
-value`) via a small script that hard-codes each value, so it is checkable and
-re-runnable. Flag tables that are not based on the data and have **no producing code**
-as "not from data". Then compare as below. Comparing to a paper is weaker than
-output-to-output (the paper may be rounded or predate a correction), so document
-any package-vs-paper gap rather than assuming the package is wrong.
+First **transcribe the paper's numbers into a CSV**, one row per cell
+(`table, panel, row, col, stat, value`), main text and appendix both, and keep
+that CSV as a deliverable (it is an input, not an intermediate). Then parse the
+package's `.tex`/`.xml` and match each cell, at the paper's printed precision,
+into `MATCH` / `MATCH (display rounding: ±1 in the last digit)` / `DIFFERS` /
+`NOT FOUND`, with a `note` column. Read the package's own change log first —
+a well-kept `CHANGES.txt` predicts the differing cells (an order-dependent
+estimator such as UJIVE; a corrected imputation) and the report should say
+"predicted" rather than "unexplained". Comparing to a paper is weaker than
+output-to-output (rounding, corrections after publication); document a gap, do
+not assume the package is wrong.
+
+**In-text numbers** count too: pair every in-text log the package writes with the
+sentence it supports (`scripts/compare_intext.py` with a hand-written mapping
+CSV: log, regex that extracts the statistic, which occurrence, paper value,
+sentence, line). Logs with no sentence quoting their value are listed without a
+verdict.
+
+## Figures
+
+Byte- or pixel-comparing PDFs is only meaningful when **both were produced on the
+same machine**: across machines, font family and page scaling alone change 4–7 %
+of pixels and every byte, hiding or faking a data difference. So when the
+reference figures were built elsewhere, re-run the reference package's *figure
+code* locally and compare against that rendering with
+`scripts/compare_figures.py REF_DIR NEW_DIR OUT.csv`: identical content streams
+and 0.0000 % differing pixels is the standard. Stata's `.gph` working files embed
+timestamps and in-memory object handles that differ on every run; ignore those
+lines (`compare_before_after.py` does).
+
+## Before vs after a change to the package
+
+After minimisation or any edit, snapshot the output folders, re-run, and compare
+every file with `scripts/compare_before_after.py BEFORE_DIR AFTER_DIR OUT.csv`
+(text outputs with timestamps stripped, PDFs/EPS on content, `.gph` on content
+minus handles). "N of N identical, 0 differ, 0 missing" is the proof that the
+change altered nothing.
 
 ## Run the comparison (systematic, every estimate)
 
-Build **one row per number** with its metadata and stat type (coef / SE / p /
-N / R² / test), for **all** of them — not the headline few. Then merge the two
-tables on a shared key and run `scripts/compare_tables.py REF.csv NEW.csv OUT_DIR`:
-it differences **at the reported precision** (a cell matches when the new value
-rounds to the reference; small float noise ignored) and writes **one review
-workbook** `comparison_review.xlsx`:
-- a `full` tab — every cell side-by-side: reference, new, difference, `status`
-  (exact / differs / missing), and an **empty `reason` column to fill per mismatch**.
-- a `summary` tab — totals and breakdown: # exact, # differ, # missing, `result`,
-  and counts by stat type — the eyeball-able bottom line.
-
-It **exits nonzero** when any cell differs or is missing, so a discrepancy can't be
-missed by not reading the log.
-
-Systematic coverage is the point: it catches what a spot-check misses (a single
-mis-captured statistic, or a handful of cells that differ for a documented reason).
-For every differing cell, record a specific `reason` — a rounding boundary, an
-estimator/software version effect, or a genuine data difference — so the report
-explains itself.
+For two estimate tables with a shared key, `scripts/compare_tables.py REF.csv
+NEW.csv OUT_DIR` differences at the reported precision and writes
+`comparison_review.xlsx` (`full` with an empty `reason` column, `summary`); it
+exits nonzero on any difference. For every differing cell record a specific
+reason, from the usual suspects: a rounding boundary; a Stata / user-package
+version (`reghdfe`, `lassopack`, `sensemakr`); a documented correction in the
+package's change log; **dependence on id sort order or magnitude** — an estimator
+that reads row order (UJIVE, some bootstraps/jackknives), a cutoff on the id
+(`if id > k`), dummies numbered by id rank (`egen group`, `tab, gen`), a row picked
+by position after `sort id` (`_n`, `duplicates drop`, `sample`) — any of which
+moves when ids are scrambled non-monotonically (see `scramble-ids`, step 0, and
+its scanner); an adaptation made to get the package to run; a genuine data
+difference.
 
 ## Account for the whole paper, both directions
 Some code produces extras not in the published subset (note them); some sections
-need external data the package doesn't ship (obtain and clean it, or document what
-can't be reproduced and why). A script's internal table numbering is often offset
-from the published numbering — map by content, not label.
+need external data or software the package doesn't ship. Script table numbering is often offset from the published one — map by content.
 
 ## Running the two packages (they may differ)
-The original and cleaned packages often target different Stata versions or were
-written by different people, so a run may need adaptation. `references/running-and-capturing.md`
-covers running Stata headless + reading logs, the mechanical runnability-fix
-catalogue, the verbatim-read for capture instrumentation, and the capture/compare
-gotchas (`gettoken` trim, `tabstat` needs `save`, key-based alignment, …).
+`references/running-and-capturing.md` covers running Stata headless, the
+runnability-fix catalogue, and capture gotchas. Portability defects met in
+practice, to report (not silently fix): Windows backslash paths (`"$root\2. data\x"`
+— file not found on macOS/Linux), `ssc install` of a package that lives on the
+Stata Journal (`zanthro` = `dm0004_1`), a bundled `ado/` folder never added to the
+adopath, a release whose `$root` points at the *internal* identified folder.

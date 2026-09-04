@@ -35,6 +35,13 @@ program define list_pii_surfaces, rclass
         local isstr = cond(substr("`ty'",1,3)=="str",1,0)
         local vl : value label `v'
         local ll : variable label `v'
+        * labels may contain a backtick or double quote (e.g. an unexpanded
+        * macro reference left in the label). Referencing such a label inside a
+        * compound-quoted `file write' breaks Stata's parser (rc=198) and the file
+        * is silently skipped. Neutralised via mata, which reads the macro value
+        * without sending it back through the macro parser.
+        mata: st_local("ll", subinstr(subinstr(st_local("ll"), char(96), "'"), char(34), "'"))
+        mata: st_local("vl", subinstr(subinstr(st_local("vl"), char(96), "'"), char(34), "'"))
         local nstr = `nstr' + `isstr'
         if "`vl'" != "" local nlab = `nlab' + 1
         if "`ll'" != "" local nvarlab = `nvarlab' + 1

@@ -20,7 +20,7 @@ gl out  "."             // where the workbook + sentinel go
 local IDSPECS "myid 20000 99999" "hhid 300000 999999"
 
 *==================================================================*
-* A/B/C -- per correspondence table: 1-to-1, new-range-disjoint, monotonic
+* A/B/C -- per correspondence table: 1-to-1, new-range-disjoint, rank retention (Spearman)
 *==================================================================*
 tempfile idres
 postfile P str32 check str32 item str8 status str244 detail using "`idres'", replace
@@ -40,13 +40,11 @@ foreach spec of local IDSPECS {
     local nmin = r(min)
     local nmax = r(max)
     local overlap = !(`nmax' < `omin' | `nmin' > `omax')
-    sort `v'
-    quietly gen byte _bad = `v'_pubrep <= `v'_pubrep[_n-1] if _n > 1
-    quietly count if _bad==1
-    local nonmono = r(N)
+    quietly spearman `v' `v'_pubrep
+    local rho = r(rho)
+    post P ("rank_retention") ("`v'") (cond(abs(`rho')<0.1,"OK",cond(abs(`rho')<0.5,"WARN","FAIL"))) ("Spearman old vs new = " + string(`rho',"%6.3f") + " (~0 expected; high = order preserved = reversible)")
     post P ("1-to-1")     ("`v'") (cond(`dold'==`n' & `dnew'==`n',"OK","FAIL")) ("distinct old=`dold' new=`dnew' of N=`n'")
     post P ("no-overlap") ("`v'") (cond(`overlap'==0,"OK","FAIL"))              ("old[`omin',`omax'] new[`nmin',`nmax']")
-    post P ("monotonic")  ("`v'") (cond(`nonmono'==0,"OK","FAIL"))              ("`nonmono' non-increasing step(s)")
 }
 postclose P
 
