@@ -40,8 +40,6 @@ Or as a plain folder of skills, kept current with `git pull`:
 git clone https://github.com/BeaLeydier/deidentify ~/.claude/skills/deidentify
 ```
 
-`final_aej`-style Stata tooling needs Stata 16+; the Python helpers need Python 3 with pandas and openpyxl (see Requirements above).
-
 Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.
 
