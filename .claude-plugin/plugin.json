@@ -1,6 +1,6 @@
 {
   "name": "deidentify",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Skills to de-identify research code packages and datasets, and verify a cleaned package still reproduces its results: audit PII, strip PII, scramble IDs, minimize variables, and compare results.",
   "skills": "./skills/"
 }
