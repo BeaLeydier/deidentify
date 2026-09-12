@@ -25,6 +25,23 @@ deliverable's `code/` folder (see `skills/code-package/references/deliverable-la
 | Minimize variables | `/deidentify:minimize-variables` | Keep only variables the reachable code uses (comments ignored); class each variable by how it is used; drop in two rounds, each proven by re-running; `referenced_in` per variable. |
 | Compare results | `/deidentify:compare-code-results` | Compare every estimate vs the original package and/or a paper (tables, appendix, in-text numbers, same-machine figures, before/after a change), full table + summary in one workbook. |
 
+## Install
+
+Through the Claude Code plugin manager (one-time `add`, then updates via `/plugin update`):
+
+```
+/plugin marketplace add BeaLeydier/deidentify
+/plugin install deidentify@deidentify
+```
+
+Or as a plain folder of skills, kept current with `git pull`:
+
+```
+git clone https://github.com/BeaLeydier/deidentify ~/.claude/skills/deidentify
+```
+
+`final_aej`-style Stata tooling needs Stata 16+; the Python helpers need Python 3 with pandas and openpyxl (see Requirements above).
+
 Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.
 

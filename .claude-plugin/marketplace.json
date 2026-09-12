@@ -1,17 +1,14 @@
 {
-  "name": "deidentify-marketplace",
-  "displayName": "De-identification skills",
-  "description": "Skills for de-identifying research code packages and verifying reproducibility.",
+  "name": "deidentify",
+  "owner": {
+    "name": "Béatrice Leydier"
+  },
+  "description": "De-identify research code packages and datasets, and verify the cleaned package still reproduces its results.",
   "plugins": [
     {
       "name": "deidentify",
-      "displayName": "Code de-identification suite",
-      "description": "Audit/strip PII, scramble IDs, minimize variables, and compare code results.",
-      "source": {
-        "type": "git",
-        "url": "https://github.com/BeaLeydier/deidentify",
-        "ref": "main"
-      }
+      "source": "./",
+      "description": "Audit/strip PII, scramble IDs, minimize variables, and compare code results."
     }
   ]
 }
