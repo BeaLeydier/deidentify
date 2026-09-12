@@ -7,7 +7,7 @@ Usage: scan_id_order_dependence.py OUT.csv "id1 id2 ..." dofile1.do [dofile2.do 
        (pass the do-files the master actually runs: see minimize-variables/reachable_dofiles.py)
 
 One row per hit: file, line, the code, id variable, construct, LEVEL, suggested fix.
-  A  magnitude   the id's VALUE is compared or binned: `if id > 154`, inrange(id,..), recode id
+  A  magnitude   the id's VALUE is compared or binned: e.g. `if id > 154`, inrange(id,..), recode id
                  -> banded scramble (cuts() in scramble_id) and rewrite the cutoff once, or replace
                     the condition with a shipped indicator variable
   B  numbering   numbers DERIVED from the id's sort order feed the code: egen group(id),

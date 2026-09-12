@@ -36,11 +36,11 @@ holding the original ids (one sort and a rank merge) and is not an option here.
    Run `scripts/scan_id_order_dependence.py OUT.csv "<id vars>" <reachable do-files>`
    (reachable = the files the master actually runs; see `minimize-variables`).
    It strips comments and classes every hit:
-   - **A magnitude** — the id's value is compared or binned (`if mauzaid > 154`,
+   - **A magnitude** — the id's value is compared or binned (e.g. `if regionid > 154`,
      `inrange(id,…)`, `recode id`). A random map breaks this.
    - **B numbering** — numbers derived from the id's sort order feed the code
      (`egen group(id)`, `tab id, gen()`, `encode`, `levelsof` with a counter) and
-     the code then names them (`MAU_mauzaid_84`): dummy k is "the k-th smallest
+     the code then names them (e.g. `D_regionid_84`): dummy k is "the k-th smallest
      id", not an entity.
    - **C position** — a row is picked by position after sorting on the id (`sort id`
      then `_n`, `[1]`, `duplicates drop`, `collapse (first)`, `keep in`, `sample`).
@@ -51,13 +51,15 @@ holding the original ids (one sort and a rank merge) and is not an option here.
    compare every output with the pre-scramble run (`compare-code-results`,
    `compare_before_after.py`). Identical outputs = no dependence, done. Otherwise
    the differing tables name the do-files, and the fixes are, weakest first:
-   - **banded scrambling** for a cutoff: `scramble_id … , cuts(154)` maps old values
-     ≤ 154 and > 154 into two disjoint slices, randomly *within* each; rewrite the
-     cutoff once to the slice boundary the program prints (`> 16000`). The cutoff
-     survives; the order inside each band does not;
-   - **ship the indicator instead of the rule**: replace `if id > 154` /
-     `MAU_mauzaid_84` by a variable (`treated_village`, `cutoff_group`) built once
-     from the original ids and shipped; rewrite the line to use it;
+   - **banded scrambling** for a cutoff: with a cutoff at 154, say,
+     `scramble_id … , cuts(154)` maps old values ≤ 154 and > 154 into two disjoint
+     slices, randomly *within* each; rewrite the cutoff once to the slice boundary
+     the program prints (e.g. `> 16000`). The cutoff survives; the order inside each
+     band does not;
+   - **ship the indicator instead of the rule**: replace the condition (`if id > 154`)
+     or the numbered dummy (`D_regionid_84`) by a variable (e.g. `treated_region`,
+     `cutoff_group`) built once from the original ids and shipped; rewrite the line
+     to use it;
    - **rewrite order-derived numbering**: dummies by value from an explicit list
      (`gen d_x = id==<mapped value>`), loops over the mapped values;
    - **fix tie-breaking, not the map**: for example, an explicit rule instead of `duplicates drop`.
@@ -69,19 +71,20 @@ holding the original ids (one sort and a rank merge) and is not an option here.
    files, union them first: `clear; tempfile a; save `a', emptyok; foreach f in
    f1 f2 { use <id> using "`f'", clear; append using `a'; save `a', replace };
    rename <id> oldval`), `set seed N`, then call `scramble_id <newname> <lo> <hi>
-   [, cuts(c1 c2 …)]` — it produces the `<id>,<id>_pubrep` table, prints the
-   Spearman rank correlation between old and new (≈ 0 without bands) and errors if
-   the range is too tight to stay 1-to-1. Each property has a reason:
+   [, cuts(c1 c2 …)]` — it produces the `<id>,<id>_pubrep` table (a uniform random
+   draw in the range, collisions redrawn), prints the Spearman rank correlation
+   between old and new with its sampling SE (≈ 0 without bands) and errors if the
+   range is too tight to stay 1-to-1. Each property has a reason:
    - **Seeded** (`set seed N`) — replicable.
    - **1-to-1** — a bijection; anything else changes counts/merges.
    - **Random, not order-preserving** — see step 0; bands only where a cutoff
      must survive.
    - **New range disjoint from the old if possible given the range of IDs**, so old and new can never be confused; store the new id as a wide integer type.
-   - **Scramble composites and derived ids too.** A code built as
-     `village*10000 + school*100 + seq` (a teacher code) reproduces the village id
-     arithmetically — scramble it through its own map. A derived id
-     (`uniqueid = childcode`, else `hhid*100000 + mid`) can either be mapped or
-     **reconstructed from the scrambled parts**: ask the user for each case, then record the decision.
+   - **Scramble composites and derived ids too.** A code built arithmetically from
+     other ids (for example `region*10000 + unit*100 + seq`) reproduces those ids —
+     scramble it through its own map. A derived id (for example one defined as
+     `personid = hhid*100 + memberid`) can either be mapped or **reconstructed from
+     the scrambled parts**: ask the user for each case, then record the decision.
    - **Keep the universe files** (every id value observed in the raw data, per
      family) next to the maps: they make the mapping reproducible and auditable.
 

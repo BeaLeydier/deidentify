@@ -1,4 +1,4 @@
-*! _surf_vlabel -- Mata helper for 04b: for value label `s', set locals vlflag, vlval#, vltxt#, vlwhy#
+*! _surf_vlabel -- Mata helper for pii_surfaces_summary.do: for value label `s', set locals vlflag, vlval#, vltxt#, vlwhy#
 program define _surf_vlabel
     version 16
     mata: _surf_vlabel_m("`1'")

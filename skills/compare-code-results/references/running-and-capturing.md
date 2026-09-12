@@ -59,7 +59,7 @@ Then insert `post` lines after matched estimation lines and write the file out w
 ## Capture / compare gotchas
 
 - **`gettoken` leaves a leading space in the remainder.** `gettoken a b : pair`
-  gives `b` a leading blank; a key built from it (`"T1_A_ english_b"`) fails to
+  gives `b` a leading blank; a key built from it (`"tab1_A_ x_b"`) fails to
   merge. `local b = trim("`b'")`. (Keys from the *first* token are safe.)
 - **`tabstat` returns nothing without `save`.** `r(StatTotal)` is empty unless you
   add `, save`. If keeping the command verbatim, reproduce the quantity directly

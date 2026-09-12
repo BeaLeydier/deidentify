@@ -53,7 +53,7 @@ Build a shared picture before touching anything:
   scratch/           PRIVATE: watch lists of original ids, crosswalk exports
   ```
 - **Reachable code only.** Which do-files does the master actually run? Calls
-  commented out of the master (GPS steps, R steps) and dead scripts must not
+  commented out of the master (e.g. GPS steps, R steps) and dead scripts must not
   count as uses. Which data is study data? Example datasets inside third-party
   `ado/` packages are excluded from every audit count.
 

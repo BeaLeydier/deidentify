@@ -29,7 +29,9 @@ Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.
 
 
-## Versions
+## Provenance
 
-Version 1.0: From experience deidentifying an AEJ paper replication package, outline the different skills and corresponding references.
-Version 2.0: Apply the skill to two other paper replication packages (AER, QJE) and update the references, ado files and instructions with new use cases. 
+The method and the tooling were developed on, and tested against, several published
+economics replication packages (Stata). Every package-specific detail was removed:
+variable names, thresholds and defects quoted in the skills are illustrations of the
+kind of thing to look for, not findings to check a given package against.

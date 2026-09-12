@@ -23,10 +23,9 @@ place. Two jobs: **discover** what must be removed (before stripping), and
 finds lands in **one review workbook** whose PII verdicts are *indicative* — a
 person decides, in the `is_pii` / `action` columns.
 
-Scope the audit to **study data only**: example datasets shipped inside
-third-party `ado/` packages (`florentine.dta`, `auto.dta`, …) are not the
-package's data and only add noise — exclude `ado/` from every file list and
-every count, and say so in the report.
+Scope the audit to **study data only**: example or mock datasets shipped inside
+third-party `ado/` packages or scripts (for example, `florentine.dta`, `auto.dta`, …) are not
+study data. Exclude them from the analysis, and  say so in the final report.
 
 ## Steps
 
@@ -40,10 +39,12 @@ every count, and say so in the report.
    ones), value-label sets and entries with entries flagged for a direct term or
    long free text (`value_label_flags.csv`), variable labels with a direct term — and **whether any do-file reads notes or characteristics**
    (`notes_readers.txt`; if none does, notes can be removed without touching code).
-   Narrative notes are free text and therefore a disclosure risk even when
-   eyeballing finds nothing; report their amount and let the PIs decide.
+   Dataset notes are free text and therefore can be a disclosure risk; report their amount and let the PIs decide.
 
-2. **Scan string-tail residue (self-contained).** Run
+2. **Scan string-tail residue.** 
+In Stata, string variables are stored with a terminator byte; the bytes after that are invisible to normal reads, but they remain on disk and could contain values from previous versions of the dataset, as string commands do not overwrite the entire string, only the portion up to the terminator of the new value. A value-level scan is not enough to detect this residue.
+
+Run
    `scripts/scan_string_tails.py PATH.dta OUT_DIR` on every data file (give each
    file its own OUT_DIR — the script writes a fixed file name). It reads the bytes
    after each string's terminator — invisible to normal reads, present on disk —
@@ -55,8 +56,8 @@ every count, and say so in the report.
    `pii_classify, out(<csv>) dataset(<label>) idkeys("<id glob list>") [append]`.
    One row per variable with `category` = `identifier` / `likely_pii` / `other`,
    the `reason`, `redaction_status` (content / single value / placeholder / missing
-   code / empty), four sample values, and `keyword_hit`. The rules, agreed with PIs
-   who reviewed the earlier, far noisier output:
+   code / empty), four sample values, and `keyword_hit`. The rules (chosen so the
+   shortlist stays short: a bare keyword match flags far too much):
    - identifier keys (`idkeys()`) → `identifier`, their own tab, never PII candidates;
    - a direct-identifier term in name or label (name, dob/birth, address,
      phone/contact/mobile, national id/cnic, gps/latitude/longitude/coord, email,
@@ -71,10 +72,10 @@ every count, and say so in the report.
    Never use a detector that uploads data to a third party. If `pii_classify` is not enough, other tools can be used (for example, `pii_scan` though it is in theory less complete than `pii_classify`). Note on `pii_scan` if it is used as a cross-check: it is not on SSC (J-PAL GitHub), writes malformed CSV rows for free text containing quotes/semicolons, and leaks tempvars until it hits Stata's 5,000-variable ceiling on wide files (`set maxvar 32767`).
 
 4. **Prove no original identifier survives (when crosswalks exist).** Ask whether
-   the old→new id crosswalks (from `scramble-ids`) are available; without them,
+   the old→new id crosswalks are available; without them,
    rely on 1–3 and say so. With them, run `scripts/id_leak_tests.do` (a template:
    globals for data, crosswalk folder, id families and their crosswalk columns):
-   - **Which variables are identifiers.** A variable whose *name* carries a family
+   - **Which variables are identifiers.** Either ask the user for input on this, or perform your own scan with the rules below. A variable whose *name* carries a family
      word is a *candidate*; it is kept as an identifier only if numeric with more
      than two distinct values. 0/1 indicators that merely mention an id  keyword
      are content, not ids — list them as excluded, keep them out of the tests. Export the kept list.
@@ -92,8 +93,8 @@ every count, and say so in the report.
      `n_outside_image` (not a legal new id; must be 0 unless the variable is a
      derived id whose rule you then verify row by row) and `n_in_old_only` (provably
      an old id; must be 0). Show `expected_hits_if_unscrambled` = n_distinct ×
-     share old-only beside the observed count — "0 observed against 25,400
-     expected" is the argument for families with a large overlap.
+     share old-only beside the observed count — "0 observed against tens of
+     thousands expected" is the argument for families with a large overlap.
    - **Test 2, old id elsewhere in the row, column-wise**: recover each row's old
      id through the crosswalk (new → old) and compare every other column with it;
      flag a column equal on ≥ 99 % of its non-missing rows *and* on ≥ 10 rows — an
@@ -104,7 +105,7 @@ every count, and say so in the report.
      two-to-four-digit ambient numbers. `.dta` are binary — that is what test 1
      is for; `strings | grep` on them is noise.
 
-5. **Hand the user ONE workbook.** Assemble the CSVs into a single review workbook
+5. **Hand the user one workbook.** Assemble the CSVs into a single review workbook
    (see `code-package` for the builder pattern): `README` (how to read each tab),
    `summary`, `likely_pii` (highest risk first, `is_pii`/`action` to fill),
    `other_variables`, `identifiers`, `pii_surfaces`, `dataset_notes`,
@@ -120,7 +121,7 @@ every count, and say so in the report.
 - **Run twice.** Once to build the strip list; once after strip-pii, scramble-ids
   and minimize-variables to confirm the released files are clean — on the
   *minimised* data, so the shortlist is as short as it can be.
-- **Author/RA names and file paths** are usually not PII (they are publicly
+- **Author/RA names and file paths** are not PII (they are publicly
   attached to the paper, and root paths are expected to be edited per machine).
 - **Other file types.** Apply the same value/label/metadata checks to CSV/Excel/
   text; for images/PDFs check embedded metadata (e.g. `exiftool`).

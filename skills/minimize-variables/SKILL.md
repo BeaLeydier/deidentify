@@ -33,22 +33,24 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    alwayskeep("<id / merge / sort key patterns>")`. It tokenises the reachable
    do-files with comments removed (`// …`, `* …` lines, `/* … */` blocks across
    lines) and marks a variable *used* if referenced by exact name, a wildcard/glob
-   (`t_*_irt`, `*_va`, `x*_q1`), a macro-built name (``hf`i'_s5q`j' `` → `hf*_s5q*`),
+   (e.g. `t_*_irt`, `*_va`, `x*_q1`), a macro-built name (e.g. ``s`i'_q`j' `` → `s*_q*`),
    an `a-b` range, a `reshape` stub, a `renpfix` prefix, or a `keepusing()` list —
    a `*` glued to a name (`x*100`) also registers its literal pieces. The
    `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
    `referenced_in` (dofile:line of each use, up to 20), `calc_context` and
    `calc_via` (is it computed with, directly, through a pattern, or under the name
-   it acquires through `rename A* B*` / ``rename gs`x'_s`y'q6 fans``), and `class`:
+   it acquires through `rename A* B*` or a rename to a fixed name such as
+   ``rename q`x'_s`y' income``), and `class`:
    - `used-calc` — computed with somewhere (gen, egen, regressions, collapse,
      reshape, merge/sort keys, …);
    - `structural-only` — named only in structural commands (keep, drop, order,
      rename, keepusing, format, label, …); includes one *pattern anchor* per
-     wildcard family whose every member is otherwise droppable, so `keep A2*`
+     wildcard family whose every member is otherwise droppable, so a `keep x*`
      cannot become empty. Not dropped; flagged for the authors;
    - `wildcard-only-droppable` — reached only through wildcards/ranges that also
-     match other variables (`drop gs4*`, `rename hf1* h*`, `drop _merge*`), never
-     in a calculation, also after renames. Droppable without breaking the code;
+     match other variables (for example `drop sec4*`, `rename r1_* r_*`,
+     `drop _merge*`), never in a calculation, also after renames. Droppable
+     without breaking the code;
    - `always-keep`; `drop?` — referenced nowhere.
 
 3. **Drop in two rounds, on the run copy, and let the pipeline arbitrate.**
@@ -57,10 +59,11 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    After each round run the package's master end to end and compare **every**
    output file with a snapshot taken before any drop (`compare-code-results`,
    `compare_before_after.py`): 0 errors and all files identical is the proof. When
-   the run fails it names the construct the static scan missed; the rules above
-   each came from such a failure (suffix wildcard `*_VA`, `reshape` stubs, a `*`
-   used as multiplication, a rename to a fixed name, a family whose every member
-   was droppable, tab-indented `cap drop`). Drop from the **release copy only**.
+   the run fails it names the construct the static scan missed; typical examples
+   of such constructs, which the rules above cover, are a suffix wildcard
+   (`*_va`), `reshape` stubs, a `*` used as multiplication, a rename to a fixed
+   name, a family whose every member was droppable, and a tab-indented `cap drop`.
+   Drop from the **release copy only**.
 
 4. **Report both levels.** Per dataset: variables, kept, used-calc,
    structural-only, wildcard-only, dropped; per variable: the manifest with type,

@@ -10,15 +10,15 @@
 *                 also matches other variables, never used in a calculation, also after renames)
 * Variables classed "structural-only" (named only in keep/keepusing/order/rename) are never
 * dropped here: removing them would break those commands. Flag them for the authors instead.
-* The dataset column of the workbook is the space-free link name written by make_links.sh;
-* the block below maps it back to a path -- adapt it to the package's folder names.
+* The dataset column of the workbook is the space-free link name written by make_links.sh
+* ("/" -> "__", " " -> "_"); the block below maps it back to a path. Restoring spaces cannot
+* be done blindly, so list the package's folder names that contain spaces (examples below).
 import excel using "$VARUSAGE", sheet("variables") firstrow clear
 if $ROUND==1 keep if class=="drop?"
 else keep if class=="wildcard-only-droppable"
 gen path = subinstr(dataset, "__", "/", .)
-replace path = subinstr(path, "_", " ", 1) if substr(path,1,1)=="0" | substr(path,1,1)=="2"
-replace path = subinstr(path, "raw_data", "raw data", 1)
-replace path = subinstr(path, "other_data", "other data", 1)
+* e.g. a folder "raw data" was linked as "raw_data":
+* replace path = subinstr(path, "raw_data", "raw data", 1)
 replace path = path + ".dta"
 sort path variable
 tempname M

@@ -55,14 +55,15 @@ The sections will then depend on the skills invoked int hat particular task. In 
 No scoping paragraph, no instructions-to-self, no tooling bugs (those go to the
 PI in chat). 
 
-## Examples of defects met in practice (report, do not silently fix)
-- Windows backslash paths in do-files (`"$root\2. data\x.dta"`): r(601) on POSIX.
-- `ssc install <pkg>` for a Stata Journal package (`zanthro` → `dm0004_1`,
-  `dropmiss` → `dm89_2`); an un-captured `which` after it stops the run.
-- A bundled `ado/` folder (e.g. `nwcommands-master/`) never added to the adopath,
+## Examples of defects to look for (report, do not silently fix)
+Illustrations of the kind of defect a package may carry — not a checklist of
+findings to expect in any particular package. These have been populated from practice, and can be updated in future versions of this skill.
+- Windows backslash paths in do-files (`"$root\data\x.dta"`): r(601) on POSIX.
+- `ssc install <pkg>` for a package that lives on the Stata Journal (e.g. `zanthro`
+  → `dm0004_1`, `dropmiss` → `dm89_2`); an un-captured `which` after it stops the run.
+- A bundled `ado/` folder (e.g. `some-command-master/`) never added to the adopath,
   so the code depends on a web install instead of the shipped copy.
 - The release's root global pointing at the *internal* identified folder.
-- Word lock files (`~$README.docx`), redundant `.zip` of a bundled package.
-- An unexpanded macro left in a variable label (``Value: `label_purchase' ``) —
+- An unexpanded macro left in a variable label (e.g. ``Value: `label_x' ``) —
   harmless to results, breaks naive label handling (sanitise backticks/quotes
   through Mata before writing labels to files).

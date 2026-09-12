@@ -97,8 +97,8 @@ need external data or software the package doesn't ship. Script table numbering 
 
 ## Running the two packages (they may differ)
 `references/running-and-capturing.md` covers running Stata headless, the
-runnability-fix catalogue, and capture gotchas. Portability defects met in
-practice, to report (not silently fix): Windows backslash paths (`"$root\2. data\x"`
-— file not found on macOS/Linux), `ssc install` of a package that lives on the
-Stata Journal (`zanthro` = `dm0004_1`), a bundled `ado/` folder never added to the
-adopath, a release whose `$root` points at the *internal* identified folder.
+runnability-fix catalogue, and capture gotchas. Typical portability defects to
+report (not silently fix), for example: Windows backslash paths (`"$root\data\x"`
+— file not found on macOS/Linux), `ssc install` of a package that actually lives on
+the Stata Journal (e.g. `zanthro` = `dm0004_1`), a bundled `ado/` folder never added
+to the adopath, a release whose `$root` points at the *internal* identified folder.

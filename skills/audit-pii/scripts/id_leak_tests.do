@@ -4,8 +4,9 @@
 *   $OUTDIR    where the CSVs go                    $SCRATCH  PRIVATE folder for the watch lists (never shipped)
 *   $XWALK     folder with the crosswalk .dta files
 *   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old id column> <new id column>"
-*   (the fourth family is treated as the teacher family in the name matching below; adapt the
-*    name patterns in the `foreach v of local allv` block to the package's id vocabulary)
+*   optional $IDALIAS_fam1 "stem1 stem2 ...": extra name stems that mark a variable as a
+*   candidate of that family. By default a variable is a candidate of family F when its
+*   (lowercased) name contains F; the first family that matches wins, in $IDFAMS order.
 *
 * Part A (from the crosswalks): ALL OLD, ALL NEW, OLD-ONLY (old minus new) per family, and a
 *   size table -- the overlap says how informative the membership test is for that family.
@@ -80,7 +81,6 @@ foreach fam of global IDFAMS {
     quietly levelsof share_old_only if family=="`fam'", local(sh)
     local SHARE_`fam' = `sh'
 }
-local TFAM : word 4 of $IDFAMS
 file open IN using "$DTALIST", read text
 file read IN line
 while r(eof)==0 {
@@ -93,10 +93,13 @@ while r(eof)==0 {
     foreach v of local allv {
         local lv = strlower("`v'")
         local fam ""
-        if strpos("`lv'","mauza") local fam "mauzaid"
-        else if strpos("`lv'","childcode") | strpos("`lv'","uniqueid") local fam "childcode"
-        else if strpos("`lv'","teacher") & (strpos("`lv'","code") | strpos("`lv'","_id") | strpos("`lv'","teacherid")) local fam "`TFAM'"
-        else if strpos("`lv'","hhid") local fam "hhid"
+        * CANDIDATES: name contains the family name or one of its $IDALIAS_ stems
+        foreach f of global IDFAMS {
+            local stems "`f' ${IDALIAS_`f'}"
+            foreach s of local stems {
+                if "`fam'"=="" & strpos("`lv'", strlower("`s'")) local fam "`f'"
+            }
+        }
         if "`fam'"=="" continue
         local ty : type `v'
         capture confirm numeric variable `v'
@@ -213,4 +216,4 @@ file close `ID'
 file close `T1'
 file close `T2'
 file close `T3'
-di as txt "07b done"
+di as txt "id_leak_tests done"

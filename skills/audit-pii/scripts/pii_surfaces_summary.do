@@ -108,4 +108,4 @@ file close IN
 file close `S'
 file close `N'
 file close `L'
-di as txt "04b done"
+di as txt "pii_surfaces_summary done"

@@ -1,7 +1,8 @@
 *! pii_classify -- classify every variable of the dataset in memory for direct-PII risk.
-*! Writes/appends one CSV row per variable. Replaces pii_scan: same keyword idea, but
-*! with the typing rules agreed for this project, so the output is a short shortlist
-*! (category likely_pii) plus everything else (other_variables), identifiers kept apart.
+*! Writes/appends one CSV row per variable. Same keyword idea as pii_scan, plus typing
+*! rules (numerics, numbers in disguise, time slots, count/amount labels -> other), so the
+*! output is a short shortlist (category likely_pii) plus everything else (other_variables),
+*! identifiers kept apart.
 *
 *  syntax: pii_classify, out(<csv path>) dataset(<label>) [idkeys(<glob list>)] [append]
 *

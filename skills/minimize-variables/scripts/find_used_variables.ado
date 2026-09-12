@@ -1,9 +1,9 @@
-*! find_used_variables -- keep-list builder for the "minimize variables" step (v3).
+*! find_used_variables -- keep-list builder for the "minimize variables" step.
 * Tokenizes every dofile (comments removed: // ..., * ... lines, /* ... */ blocks across
 * lines), then per dataset marks which variables the code uses and HOW:
 *   exact           the name appears as a token
-*   wildcard <pat>  the name matches a glob pattern in the code (prefix hf*, suffix *_va,
-*                   infix x*_q1, a macro-built name hf`i'_s5q`j' -> hf*_s5q*, a reshape stub)
+*   wildcard <pat>  the name matches a glob pattern in the code (e.g. prefix r1_*, suffix *_va,
+*                   infix x*_q1, a macro-built name s`i'_q`j' -> s*_q*, a reshape stub)
 *   range a-b       the name lies inside an a-b variable range
 *   always-keep     matches alwayskeep()
 * and, for the reviewer, in which command CONTEXT each reference occurs:
