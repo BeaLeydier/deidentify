@@ -28,6 +28,15 @@ restructured are their decisions.
 ## Before you start — map the package
 
 Build a shared picture before touching anything:
+- **Identifiers and data structure — ask the user first.** Which variables
+  identify people, households, places or units, in which files, at what level;
+  which are parts of a composite key or derived from other ids by a rule; which
+  are the same kind of id from two sources; the panel/time variables and the
+  keys that link the files; any cutoff the code applies to an id. Record the
+  answers in `id_inventory.csv` (`references/id-inventory.md` gives the columns
+  and the precedence rule). Every scan below produces *candidates* to add to this
+  inventory; none of them overrides what the user listed. Without an inventory,
+  run the scans, show the candidates, and ask again before any id is scrambled.
 - **Data lineage — source vs built.** Which datasets are raw *source inputs* and
   which are *constructed* by the package's own code? Trace from the code: a file
   some script `save`s is built; one only ever read is a source. De-identify the

@@ -16,8 +16,11 @@ gl deid "deid"          // de-identified datasets
 gl keys "keys"          // folder with idmap_*.dta
 gl out  "."             // where the workbook + sentinel go
 
-* one line per id map: "<idname> <lo> <hi>" (lo/hi document intent)
-local IDSPECS "myid 20000 99999" "hhid 300000 999999"
+* one entry per id map built in step 1, from the user's ID inventory: "<idname> <lo> <hi>", where
+* <idname> is the id (the crosswalk is idmap_<idname>.dta) and <lo> <hi> the new range that was
+* passed to scramble_id for it. The values below are PLACEHOLDERS -- replace the whole list with
+* the ids and ranges of the package at hand (e.g. "personid 20000 99999" "hhid 300000 999999").
+local IDSPECS `""<idname1> <lo1> <hi1>" "<idname2> <lo2> <hi2>""'
 
 *==================================================================*
 * A/B/C -- per correspondence table: 1-to-1, new-range-disjoint, rank retention (Spearman)
@@ -26,6 +29,8 @@ tempfile idres
 postfile P str32 check str32 item str8 status str244 detail using "`idres'", replace
 foreach spec of local IDSPECS {
     gettoken v rest : spec
+    gettoken lo hi : rest
+    local hi = trim("`hi'")
     use "$keys/idmap_`v'.dta", clear
     quietly count
     local n = r(N)
@@ -45,6 +50,7 @@ foreach spec of local IDSPECS {
     post P ("rank_retention") ("`v'") (cond(abs(`rho')<0.1,"OK",cond(abs(`rho')<0.5,"WARN","FAIL"))) ("Spearman old vs new = " + string(`rho',"%6.3f") + " (~0 expected; high = order preserved = reversible)")
     post P ("1-to-1")     ("`v'") (cond(`dold'==`n' & `dnew'==`n',"OK","FAIL")) ("distinct old=`dold' new=`dnew' of N=`n'")
     post P ("no-overlap") ("`v'") (cond(`overlap'==0,"OK","FAIL"))              ("old[`omin',`omax'] new[`nmin',`nmax']")
+    post P ("in-range")   ("`v'") (cond(`nmin'>=`lo' & `nmax'<=`hi',"OK","FAIL")) ("new ids inside the intended range [`lo',`hi']: observed [`nmin',`nmax']")
 }
 postclose P
 
@@ -57,7 +63,8 @@ postclose P
 tempfile dres
 postfile D str32 dataset str244 deid_only str244 orig_only str244 differing str244 unexpected long n_unmatched using "`dres'", replace
 * --- per dataset (repeat/edit this block) -------------------------------------
-* example: dataset "children", key "myid_pubrep", redacted var "namevar"
+* example: dataset "children", key "myid_pubrep", redacted var "namevar". KEY may be a varlist
+* (e.g. "myid_pubrep round" for a panel); JOINID is the ORIGINAL id merged through its idmap.
 local DATASET  "children"
 local KEY       "myid_pubrep"
 local JOINID    "myid"

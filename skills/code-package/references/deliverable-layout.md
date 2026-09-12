@@ -4,6 +4,7 @@
 ```
 <PKG-deliverable>/
 ├── REPORT_<pkg>.md              external-facing (see skeleton below)
+├── id_inventory.csv             the user's list of identifier variables and data structure (input)
 ├── code/                        every step, reviewable: master.do, config.do (all paths), numbered
 │                                01..11 scripts (Stata where natural, Python where easier — commented
 │                                block by block, pseudo-code style), ado/, README.md (step table)
@@ -41,8 +42,8 @@ The sections will then depend on the skills invoked int hat particular task. In 
 
 3. **Variable minimisation** — reachable do-files, rules, classes, both rounds,
    the proof, where the drops concentrate.
-4. **Identifier leak tests** — how identifiers were chosen (candidates by name,
-   kept if numeric with > 2 distinct values, exclusions listed), the watch-list
+4. **Identifier leak tests** — which variables were tested (the user's inventory;
+   scan candidates the user accepted or rejected, with reasons), the watch-list
    size table with overlap, tests 1–3, text sweep.
 5. **PII surfaces** — classifier rules and counts; notes/characteristics/labels
    with the decision the PIs must make.

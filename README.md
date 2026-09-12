@@ -28,6 +28,11 @@ deliverable's `code/` folder (see `skills/code-package/references/deliverable-la
 Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.
 
+Every skill starts from an **ID inventory supplied by the user** — which variables
+identify which entities, in which files, with which composite/derived rules, and how
+the datasets link (`skills/code-package/references/id-inventory.md`). Scans of the
+data only add *candidates* to that inventory; they never override it.
+
 
 ## Provenance
 

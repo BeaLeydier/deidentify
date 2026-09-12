@@ -30,7 +30,9 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
 
 2. **Build the keep-list with `find_used_variables`.** Put `scripts/` on the
    adopath; `find_used_variables, dofiles("…") datasets("…") outdir(<dir>)
-   alwayskeep("<id / merge / sort key patterns>")`. It tokenises the reachable
+   alwayskeep("<id / merge / sort / panel key patterns>")` — the variables of the
+   user's ID inventory (`code-package/references/id-inventory.md`), not names
+   guessed from the data. It tokenises the reachable
    do-files with comments removed (`// …`, `* …` lines, `/* … */` blocks across
    lines) and marks a variable *used* if referenced by exact name, a wildcard/glob
    (e.g. `t_*_irt`, `*_va`, `x*_q1`), a macro-built name (e.g. ``s`i'_q`j' `` → `s*_q*`),
@@ -73,7 +75,9 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    reduction.
 
 ## Notes
-- Identifier, merge and sort keys are `alwayskeep()` even when they look unused.
+- Identifier, merge, sort, panel and time keys — the user's ID inventory — are
+  `alwayskeep()` even when they look unused; a key the scan did not see used is
+  still a key.
 - A static scan is conservative by design; the re-run is the arbiter. Never skip it.
 - Record the manifests in the private processing readme; the public readme says
   only that unused survey variables were removed.

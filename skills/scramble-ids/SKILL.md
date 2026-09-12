@@ -32,8 +32,17 @@ edit per package. This skill assumes the data are for **public release**: the ma
 is random. An order-preserving ("monotone") map would be trivially reversible by anyone
 holding the original ids (one sort and a rank merge) and is not an option here.
 
+Everything below starts from the **user's ID inventory**
+(`code-package/references/id-inventory.md`): which variables are ids, of which
+entity, in which files, which are parts of a composite key or derived by a rule,
+which pairs are the same kind of id from two sources, and which cutoffs the code
+applies. Ask for it before touching the data. The data can suggest additions (a
+variable that uniquely identifies rows, two variables with identical value sets)
+— put them to the user; a scan never decides on its own what an id is or that two
+ids share a universe.
+
 0. **Diagnose whether the code depends on id order — before designing the map.**
-   Run `scripts/scan_id_order_dependence.py OUT.csv "<id vars>" <reachable do-files>`
+   Run `scripts/scan_id_order_dependence.py OUT.csv "<id vars from the inventory>" <reachable do-files>`
    (reachable = the files the master actually runs; see `minimize-variables`).
    It strips comments and classes every hit:
    - **A magnitude** — the id's value is compared or binned (e.g. `if regionid > 154`,
@@ -88,10 +97,13 @@ holding the original ids (one sort and a rank merge) and is not an option here.
    - **Keep the universe files** (every id value observed in the raw data, per
      family) next to the maps: they make the mapping reproducible and auditable.
 
-2. **Respect ID relationships (this is where correctness lives):**
+2. **Respect ID relationships (this is where correctness lives)** — as declared
+   in the inventory, confirmed with the user:
    - **Same-universe IDs share one map** — if two variables are the same kind of
-     id from different sources, map both through one table so an entity gets the
-     same new id in both.
+     id from different sources (the inventory's `same_as`), map both through one
+     table so an entity gets the same new id in both. Identical value sets in the
+     data are a reason to *ask* whether two variables share a universe, not a
+     reason to merge their maps.
    - **IDs in several datasets use a UNION map** — build from the union of values
      across *every* file holding the id, so the same entity is consistent
      everywhere; a map built from one file drops rows on merges elsewhere.

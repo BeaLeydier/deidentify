@@ -4,18 +4,23 @@
 *   $OUTDIR    where the CSVs go                    $SCRATCH  PRIVATE folder for the watch lists (never shipped)
 *   $XWALK     folder with the crosswalk .dta files
 *   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old id column> <new id column>"
-*   optional $IDALIAS_fam1 "stem1 stem2 ...": extra name stems that mark a variable as a
-*   candidate of that family. By default a variable is a candidate of family F when its
-*   (lowercased) name contains F; the first family that matches wins, in $IDFAMS order.
+*   $IDVARS_fam1 "var1 var2 ...": the USER'S ID INVENTORY -- the variables of that family
+*              (names; every dataset holding the name). A listed variable is tested whatever
+*              its name or type. Variables the name scan finds that are NOT listed are
+*              reported as candidates (source = scan, not tested) for the user to accept.
+*   optional $IDALIAS_fam1 "stem1 stem2 ...": extra name stems for that scan (by default a
+*              variable is a candidate of family F when its lowercased name contains F).
+*   With no $IDVARS_ global at all the scan decides by itself and labels its rows `inferred`.
 *
 * Part A (from the crosswalks): ALL OLD, ALL NEW, OLD-ONLY (old minus new) per family, and a
 *   size table -- the overlap says how informative the membership test is for that family.
 * Part B, test 1 (per identifier variable, distinct values): n_outside_image (not a legal new
 *   id) and n_in_old_only (provably an old id); expected_hits_if_unscrambled = n_distinct x
 *   share_old_only, what an UNSCRAMBLED column would show.
-*   Which variables are identifiers: a name that carries a family word is a CANDIDATE; it is
-*   kept only if numeric with > 2 distinct values (0/1 indicators that merely mention the word
-*   are listed as excluded). The kept list is exported (identifier_variables.csv).
+*   Which variables are identifiers: the user's inventory ($IDVARS_fam); unlisted name-scan
+*   hits are exported as candidates; without an inventory a scan hit is kept only if numeric
+*   with > 2 distinct values (0/1 indicators that merely mention the word are excluded).
+*   The list, with its source (inventory / scan / inferred), is identifier_variables.csv.
 * Test 2: digit-only string values >= 10,000 against every family's OLD-ONLY set.
 * Test 3 (old id elsewhere in the row, column-wise): recover each row's OLD id through the
 *   crosswalk (new -> old); for EVERY other column count rows equal to it; a column equal on
@@ -69,7 +74,12 @@ file close `S'
 * ---- Part B: tests ----
 tempname ID T1 T2 T3
 file open `ID' using "$OUTDIR/identifier_variables.csv", write replace
-file write `ID' "dataset,variable,family,storage_type,n_nonmiss,n_distinct,kept_as_identifier,reason" _n
+file write `ID' "dataset,variable,family,source,storage_type,n_nonmiss,n_distinct,kept_as_identifier,reason" _n
+* is an inventory provided at all?
+local HAVEINV = 0
+foreach fam of global IDFAMS {
+    if `"${IDVARS_`fam'}"' != "" local HAVEINV = 1
+}
 file open `T1' using "$OUTDIR/id_crossreference_numeric.csv", write replace
 file write `T1' "dataset,variable,family,n_nonmiss,n_distinct,n_outside_image,n_in_old_only,share_old_only,expected_hits_if_unscrambled,min,max" _n
 file open `T2' using "$OUTDIR/id_crossreference_string.csv", write replace
@@ -93,11 +103,26 @@ while r(eof)==0 {
     foreach v of local allv {
         local lv = strlower("`v'")
         local fam ""
-        * CANDIDATES: name contains the family name or one of its $IDALIAS_ stems
+        local src ""
+        * 1. the user's inventory: listed variables, by name, per family
         foreach f of global IDFAMS {
-            local stems "`f' ${IDALIAS_`f'}"
-            foreach s of local stems {
-                if "`fam'"=="" & strpos("`lv'", strlower("`s'")) local fam "`f'"
+            foreach s of global IDVARS_`f' {
+                if "`fam'"=="" & "`lv'"==strlower("`s'") {
+                    local fam "`f'"
+                    local src "inventory"
+                }
+            }
+        }
+        * 2. the name scan: candidates (name contains the family name or an $IDALIAS_ stem)
+        if "`fam'"=="" {
+            foreach f of global IDFAMS {
+                local stems "`f' ${IDALIAS_`f'}"
+                foreach s of local stems {
+                    if "`fam'"=="" & strpos("`lv'", strlower("`s'")) {
+                        local fam "`f'"
+                        local src = cond(`HAVEINV', "scan", "inferred")
+                    }
+                }
             }
         }
         if "`fam'"=="" continue
@@ -115,15 +140,20 @@ while r(eof)==0 {
                 local nd = _N
             restore
         }
+        if "`src'"=="scan" {
+            file write `ID' `""`rel'","`v'","`fam'","scan","`ty'",`nnm',`nd',0,"name-scan candidate NOT in the user inventory: accept (add to IDVARS_`fam') or reject""' _n
+            continue
+        }
         if !`isnum' {
-            file write `ID' `""`rel'","`v'","`fam'","`ty'",`nnm',`nd',0,"string variable (covered by test 2)""' _n
+            file write `ID' `""`rel'","`v'","`fam'","`src'","`ty'",`nnm',`nd',0,"string variable (covered by test 2)""' _n
             continue
         }
-        if `nd'<=2 {
-            file write `ID' `""`rel'","`v'","`fam'","`ty'",`nnm',`nd',0,"name mentions a family word but it is a 0/1 indicator, not an id""' _n
+        if "`src'"=="inferred" & `nd'<=2 {
+            file write `ID' `""`rel'","`v'","`fam'","inferred","`ty'",`nnm',`nd',0,"name mentions a family word but it is a 0/1 indicator, not an id (no inventory to confirm)""' _n
             continue
         }
-        file write `ID' `""`rel'","`v'","`fam'","`ty'",`nnm',`nd',1,"identifier""' _n
+        local why = cond("`src'"=="inventory","identifier (user inventory)","identifier inferred from its name (no inventory provided)")
+        file write `ID' `""`rel'","`v'","`fam'","`src'","`ty'",`nnm',`nd',1,"`why'""' _n
         if `nnm'==0 continue
         * ---- Test 1 ----
         preserve

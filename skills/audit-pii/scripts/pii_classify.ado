@@ -8,7 +8,7 @@
 *
 *  category  : identifier | likely_pii | other
 *  RULES (applied in this order)
-*   1. identifier key (name matches idkeys())           -> identifier   (reported in its own tab)
+*   1. identifier key (name matches idkeys(), i.e. the user's ID inventory) -> identifier (own tab)
 *   2. direct-id term in name or label                  -> likely_pii   (name, dob/birth, address,
 *      phone/contact/mobile, national id / cnic, gps/latitude/longitude/coord, email, caste)
 *      or a lat/lon PAIR of adjacent variables          -> likely_pii

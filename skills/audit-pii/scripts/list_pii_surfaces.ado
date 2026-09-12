@@ -1,12 +1,15 @@
 *! list_pii_surfaces -- enumerate PII surfaces in the dataset in memory (read-only).
 * Writes ONE review workbook (<stub>_review.xlsx: sheets `summary`, `variables`, `identifiers`)
 * plus a free-text dump (<stub>_dump.txt). The `variables` sheet has empty `is_pii`
-* and `action` columns for the reviewer to fill. Put this dir on the adopath, then:
+* and `action` columns for the reviewer to fill. idvars() takes the user's ID inventory
+* (variable names or globs): those are reported as user-listed identifiers; id-like names and
+* row-unique variables that are NOT listed are reported as candidates for the user to accept
+* or reject (they never reclassify a listed variable). Put this dir on the adopath, then:
 *     use "data.dta", clear
-*     list_pii_surfaces, stub(surfaces) outdir(".")
+*     list_pii_surfaces, stub(surfaces) outdir(".") idvars("personid hhid *_pubrep")
 * See references/pii-surfaces.md for the full checklist (A-D).
 program define list_pii_surfaces, rclass
-    syntax , STUB(string) [OUTdir(string)]
+    syntax , STUB(string) [OUTdir(string) IDVars(string)]
     if "`outdir'"=="" local outdir "."
 
     * --- free-text surfaces dump (B1 value labels, B4 notes+char, B2/B3 keywords) ---
@@ -55,29 +58,34 @@ program define list_pii_surfaces, rclass
     tempfile icsv
     tempname I
     file open `I' using "`icsv'", write replace
-    file write `I' "variable,name_looks_like_id,uniquely_ids_alone,is_scrambled_pubrep,note" _n
+    file write `I' "variable,user_listed,name_looks_like_id,uniquely_ids_alone,is_scrambled_pubrep,status,note" _n
     local idnamed ""
     foreach v of varlist _all {
         local lv = strlower("`v'")
+        local ul = 0
+        foreach k of local idvars {
+            if strmatch("`lv'", strlower("`k'")) local ul = 1
+        }
         local nm = 0
         if strmatch("`lv'","*id") | strmatch("`lv'","*_id*") | strmatch("`lv'","*code*") ///
            | strmatch("`lv'","*key*") | strmatch("`lv'","*uuid*") | strmatch("`lv'","*serial*") local nm = 1
         capture isid `v'
         local uq = (_rc==0)
         local pr = strmatch("`lv'","*_pubrep")
-        if `nm' | `uq' {
-            if `nm' local idnamed "`idnamed' `v'"
+        if `ul' | `nm' | `uq' {
+            if `ul' | `nm' local idnamed "`idnamed' `v'"
+            local st = cond(`ul', "identifier (user inventory)", "candidate (not in the user inventory: accept or reject)")
             local note = cond(`pr',"scrambled release id", ///
                 cond(`nm' & `uq',"id-name AND unique", cond(`uq',"uniquely identifies rows","id-like name")))
-            file write `I' "`v',`nm',`uq',`pr',`note'" _n
+            file write `I' "`v',`ul',`nm',`uq',`pr',`st',`note'" _n
         }
     }
-    local jointnote "n/a (no id-named vars)"
+    local jointnote "n/a (no listed or id-named vars)"
     if "`idnamed'" != "" {
         capture isid `idnamed'
-        local jointnote = cond(_rc==0,"YES: id-named vars jointly identify rows","no")
+        local jointnote = cond(_rc==0,"YES: listed + id-named vars jointly identify rows","no")
     }
-    file write `I' "(joint id-named key),,,,`jointnote'" _n
+    file write `I' "(joint key),,,,,,`jointnote'" _n
     file close `I'
 
     quietly describe

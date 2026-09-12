@@ -23,6 +23,13 @@ place. Two jobs: **discover** what must be removed (before stripping), and
 finds lands in **one review workbook** whose PII verdicts are *indicative* — a
 person decides, in the `is_pii` / `action` columns.
 
+Start from the **user's ID inventory** (`code-package/references/id-inventory.md`):
+the listed identifier variables feed `idkeys()`, `idvars()` and `$IDVARS_<family>`
+below. What the scans find on their own — id-like names, variables that uniquely
+identify rows, family words — is reported as *unlisted candidates* for the user to
+accept or reject; it never reclassifies a listed variable. Ask for the inventory
+before scanning; without one, the outputs are labelled `inferred`.
+
 Scope the audit to **study data only**: example or mock datasets shipped inside
 third-party `ado/` packages or scripts (for example, `florentine.dta`, `auto.dta`, …) are not
 study data. Exclude them from the analysis, and  say so in the final report.
@@ -31,8 +38,10 @@ study data. Exclude them from the analysis, and  say so in the final report.
 
 1. **Enumerate every PII surface — not just cell values.** Walk the checklist in
    `references/pii-surfaces.md`. Put `scripts/` on the adopath and call
-   `list_pii_surfaces, stub(<name>) outdir(<dir>)` on each dataset: per-dataset
-   workbook (`variables`, `identifiers`, `summary` tabs) plus a free-text dump of
+   `list_pii_surfaces, stub(<name>) outdir(<dir>) idvars("<inventory globs>")` on
+   each dataset: per-dataset workbook (`variables`, `identifiers` — user-listed
+   ids and, apart from them, id-like names and row-unique variables as candidates —
+   `summary` tabs) plus a free-text dump of
    value labels, notes and `char`. Then run `scripts/pii_surfaces_summary.do`
    (a template: set `$DATADIR $DTALIST $OUTDIR $CODEDIR`) for summary statistics on these
    other potential places for pii (allowing the human reviewer to decide whether to keep, drop, or investigate further): per dataset, the number and size of notes (full text exported to `dataset_notes.csv`), characteristics (machine-generated reshape/xi/tsset bookkeeping told apart from hand-written
@@ -53,12 +62,14 @@ Run
 
 3. **Classify every variable with `pii_classify` (same logic as `pii_scan`, but with more details).** Put
    `scripts/` on the adopath; per dataset:
-   `pii_classify, out(<csv>) dataset(<label>) idkeys("<id glob list>") [append]`.
+   `pii_classify, out(<csv>) dataset(<label>) idkeys("<inventory globs>") [append]`
+   (`idkeys()` = the inventory's identifier variables, not a guess from names).
    One row per variable with `category` = `identifier` / `likely_pii` / `other`,
    the `reason`, `redaction_status` (content / single value / placeholder / missing
    code / empty), four sample values, and `keyword_hit`. The rules (chosen so the
    shortlist stays short: a bare keyword match flags far too much):
-   - identifier keys (`idkeys()`) → `identifier`, their own tab, never PII candidates;
+   - identifier keys (`idkeys()`, from the inventory) → `identifier`, their own tab,
+     never PII candidates;
    - a direct-identifier term in name or label (name, dob/birth, address,
      phone/contact/mobile, national id/cnic, gps/latitude/longitude/coord, email,
      caste), a lat/lon **pair** of adjacent variables, or value labels that read
@@ -74,11 +85,18 @@ Run
 4. **Prove no original identifier survives (when crosswalks exist).** Ask whether
    the old→new id crosswalks are available; without them,
    rely on 1–3 and say so. With them, run `scripts/id_leak_tests.do` (a template:
-   globals for data, crosswalk folder, id families and their crosswalk columns):
-   - **Which variables are identifiers.** Either ask the user for input on this, or perform your own scan with the rules below. A variable whose *name* carries a family
-     word is a *candidate*; it is kept as an identifier only if numeric with more
-     than two distinct values. 0/1 indicators that merely mention an id  keyword
-     are content, not ids — list them as excluded, keep them out of the tests. Export the kept list.
+   globals for data, crosswalk folder, id families, their crosswalk columns and the
+   listed variables):
+   - **Which variables are identifiers.** The inventory: `$IDVARS_<family>` lists
+     the variables of each family, and every listed variable is tested, whatever
+     its name or type. The script also scans names for family words and reports
+     what it finds *and the user did not list* as unlisted candidates
+     (`identifier_variables.csv`, `source = scan`, not tested) — show them to the
+     user and add the accepted ones to the inventory. Only when no `$IDVARS_`
+     global is set at all does the scan decide by itself (a name that carries a
+     family word, numeric with more than two distinct values; 0/1 indicators that
+     merely mention an id word are content), and every such row is labelled
+     `inferred`. Export the list either way.
    - **Watch lists.** Per family, from the crosswalk: ALL OLD, ALL NEW, and
      OLD-ONLY (old ids that are never a legal new value). Report the sizes: the
      **overlap** says how informative the test is. A width-preserving scramble can
@@ -108,7 +126,8 @@ Run
 5. **Hand the user one workbook.** Assemble the CSVs into a single review workbook
    (see `code-package` for the builder pattern): `README` (how to read each tab),
    `summary`, `likely_pii` (highest risk first, `is_pii`/`action` to fill),
-   `other_variables`, `identifiers`, `pii_surfaces`, `dataset_notes`,
+   `other_variables`, `identifiers` (user-listed, then unlisted candidates with
+   the user's accept/reject decision), `pii_surfaces`, `dataset_notes`,
    `value_label_flags`, `id_watchlist_sizes`, `id_crossref_numeric` (with a
    plain-language `verdict`), `id_crossref_string`, `id_mergeback_rowtest`,
    `string_tails`. In the report, describe the PII shortlist as *indicative* and
