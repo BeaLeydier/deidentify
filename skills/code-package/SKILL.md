@@ -80,9 +80,9 @@ Build a shared picture before touching anything:
    correspondence tables (kept private), apply them, verify fail-loud, update the
    analysis code to the new IDs, and smoke-test that the package still runs.
 4. **Minimize variables** → invoke **`deidentify:minimize-variables`**. Keep only variables
-   the reachable code uses, in two rounds (unreferenced; wildcard-only never
-   computed with), each proven by re-running the package and comparing every
-   output file with a pre-drop snapshot. Do this **before** the confirm audit, so
+   the reachable code uses (a static read of the do-files), in one round, proven
+   by re-running the package and comparing every output file with a pre-drop
+   snapshot. Do this **before** the confirm audit, so
    the PII shortlist is as short as it can be.
 5. **Compare results** → invoke **`deidentify:compare-code-results`**. Run the cleaned
    package and compare every estimate against the original package's output and/or

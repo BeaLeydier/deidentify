@@ -40,7 +40,7 @@
 
 The sections will then depend on the skills invoked int hat particular task. In general, there will be one section per skill. The below is only one example, which will depend based on skills applied.
 
-3. **Variable minimisation** — reachable do-files, rules, classes, both rounds,
+3. **Variable minimisation** — reachable do-files, rules, classes, the drop,
    the proof, where the drops concentrate.
 4. **Identifier leak tests** — which variables were tested (the user's inventory;
    scan candidates the user accepted or rejected, with reasons), the watch-list
