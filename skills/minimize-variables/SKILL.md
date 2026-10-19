@@ -77,7 +77,9 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    `scripts/drop_unused.do` (template) into the project's `code/`: it drops `drop?` and
    `wildcard-only-droppable` (and `structural-only` with `$DROP_STRUCTURAL=1`, together
    with a project script that edits the lines naming them and lists every change), and
-   writes the manifest as the `dropped` tab of the same workbook. Snapshot the outputs
+   writes the manifest as the `dropped` tab of the same workbook. Drop a structural-only
+   variable only when every line naming it holds its literal name (a line that reaches it
+   through a macro-built name, ``ch`x'_bmi``, cannot be edited safely) — keep the others. Snapshot the outputs
    of the run copy *before* the drop, run the package's master end to end after it, and
    compare every output file (`shared/compare_before_after.py`): 0 errors and all files
    identical is the proof. When the run fails it names what the static read missed;

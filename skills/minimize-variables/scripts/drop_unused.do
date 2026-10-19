@@ -7,7 +7,9 @@
 *              the dataset path relative to the package root, as listed in its datasets() file)
 *   $DROP_STRUCTURAL  1 = also drop class "structural-only" (named only in keep/order/rename/
 *              label/...). Those lines must then be edited in the run copy's do-files too --
-*              that is project-specific: write it as its own script and list every changed line.
+*              that is project-specific: write it as its own script, run it first, list every
+*              changed line, and drop only variables whose every naming line holds the literal
+*              name (not only a macro-built one) -- restrict the drop below to that list.
 * Drops class "drop?" (referenced by no do-file) and "wildcard-only-droppable" (reached only
 * through wildcards/ranges that also match other variables, never used in a calculation).
 * Writes the manifest as sheet `dropped` of $VARUSAGE (one row per dropped variable).
