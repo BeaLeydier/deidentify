@@ -39,7 +39,8 @@ relative to the package root); list the do-files the master runs with
 
 ## Steps
 
-Put `scripts/` on the adopath (or copy the tools into the project's `code/`).
+Which steps run, and into which workbook, depends on the situation — see *Which audit,
+which workbook* below. Put `scripts/` on the adopath (or copy the tools into the project's `code/`).
 
 1. **Classify every variable** —
    `pii_classify, datasets(datasets.txt) root(<pkg>) workbook(<wb>) idkeys("<inventory>")`
@@ -98,10 +99,38 @@ Put `scripts/` on the adopath (or copy the tools into the project's `code/`).
      are distinctive, shorter ones ambient numbers.
    How much *order* a map keeps (rank correlation) is checked by **check-id-order**.
 
-5. **Hand the user the workbook**, with a `README` tab saying how to read each tab and a
-   `summary` tab with the counts and a `result` cell. In the report, describe the PII
+5. **Hand the user the workbook** — see *Which audit, which workbook* below. In the report, describe the PII
    shortlist as *indicative* and point to the tab; state plainly what is proven
    (identifiers, residue) and what needs judgement (free text).
+
+## Which audit, which workbook
+
+An audit covers PII (steps 1–3) and, where ids are at stake, the ids (step 4 and the
+**check-id-order** skill):
+
+| situation | PII audit | id audit |
+|---|---|---|
+| audit of a dataset whose ids are **not scrambled** | yes | the code scan only (check-id-order, mode 1): does the code use an id's value or order — what the scramble will have to respect |
+| audit of a **scrambled** dataset (crosswalks available) | yes | yes: code scan, id maps (check-id-order, mode 2) and the leak tests of step 4 |
+| **after a clean-up** that follows an audit | yes, plus the tab `metadata_cleaned` (what the clean-up removed) | only if the clean-up scrambled or re-scrambled ids |
+
+So a clean-up produces two workbooks: `<pkg>_audit_before_cleanup.xlsx` (what there is to
+decide: run it on the minimised data, after minimize-variables, so the shortlist is as short
+as it can be) and `<pkg>_audit_after_cleanup.xlsx` (what is left: the same PII audit on the
+cleaned data, confirming nothing that was to go remains).
+
+**Tab order** (the README tab lists them in this order; the tools write plain names, the last
+step of the project orders and numbers them, e.g. with `shared/xlsx_sheet.py`'s `arrange`):
+`README`, `summary`, then
+1. PII audit — `1. likely_pii`, `1. other_variables`, `1. identifiers`, `1. id_candidates`,
+   `1. pii_surfaces`, `1. dataset_notes`, `1. value_label_flags`, `1. string_tails`
+   (after a clean-up also `1. metadata_cleaned`);
+2. id audit — `2. code_scan`, `2. id_maps`, `2. id_watchlist_sizes`,
+   `2. id_crossref_numeric`, `2. id_crossref_string`, `2. id_mergeback_rowtest`,
+   `2. id_text_sweep`.
+`1. identifiers` lists the variables of the ID inventory found in each dataset — the keys
+set aside from the PII shortlist; the leak tests' results for them are one row per
+variable in `2. id_crossref_numeric`.
 
 ## Notes
 

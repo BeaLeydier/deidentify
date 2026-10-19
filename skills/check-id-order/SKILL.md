@@ -17,7 +17,9 @@ Relabelling an id with a strict one-to-one map leaves every regression, cluster,
 and group statistic unchanged — **unless the code uses the id's value or order**. And a
 map that keeps the original order (old and new ranks correlated) is reversible by anyone
 holding the original ids: one sort and a rank merge. This skill answers both questions,
-in two modes. Everything lands in one workbook (`id_order_review.xlsx`).
+in two modes. Its tabs (`code_scan`, `id_maps`, `relabel_test`) go in the audit workbook
+(audit-pii, *Which audit, which workbook*): the code scan alone for a dataset whose ids are
+not scrambled yet; the code scan and the id maps for a scrambled one.
 
 Conventions (reproducible scripts in the project's `code/`, one workbook, loud failure):
 `shared/conventions.md`. The ids to check come from the user's ID inventory
@@ -27,7 +29,7 @@ Conventions (reproducible scripts in the project's `code/`, one workbook, loud f
 
 1. **Static scan of the code.** List the do-files the master runs
    (`shared/reachable_dofiles.py <package> <master.do> > dofiles.txt`), then
-   `scripts/scan_id_order_dependence.py id_order_review.xlsx "<inventory id vars>" dofiles.txt`.
+   `scripts/scan_id_order_dependence.py <workbook> "<inventory id vars>" dofiles.txt`.
    Comments are stripped; every hit is classed (tab `code_scan`):
    - **A magnitude** — the value is compared or binned (`if regionid > 154`,
      `inrange(id,…)`, `recode id`): a random map breaks it;

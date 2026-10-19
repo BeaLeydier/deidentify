@@ -69,27 +69,27 @@ Build a shared picture before touching anything:
   count as uses. Which data is study data? Example datasets inside third-party
   `ado/` packages are excluded from every audit count.
 
-## The pipeline
+## The pipeline: three tasks, in this order
 
-1. **Audit PII** → **`deidentify:audit-pii`**: every PII surface across all files
-   (string values, PII-bearing numerics, value labels, variable labels/names,
-   notes/characteristics, hidden string-tail bytes, other files) into a review
-   workbook for the user to confirm.
-2. **Strip PII** → **`deidentify:strip-pii`**: drop or overwrite each confirmed field
-   with a user-confirmed placeholder, clearing the underlying bytes.
-3. **Check id order** → **`deidentify:check-id-order`**: does the code use an id's
-   value or order? Static scan plus the empirical relabel test decide the scramble
-   method (random, banded, or a code fix first).
-4. **Scramble IDs** → **`deidentify:scramble-ids`**: seeded 1-to-1 maps (kept
-   private), applied, verified, analysis code updated; then `check-id-order` in audit
-   mode on the maps.
-5. **Minimize variables** → **`deidentify:minimize-variables`**: keep only what the
-   reachable code uses (static read), one drop round proven by a re-run with every
-   output identical. Do this **before** the confirm audit, so the shortlist is short.
-6. **Compare results** → **`deidentify:compare-code-results`**: every estimate against
-   the original package's output and/or the paper (tables, appendix, in-text numbers,
-   same-machine figures) in one comparison workbook.
-7. **Confirm audit** → `deidentify:audit-pii` again on the minimised, scrambled data.
+Each task runs the cleaned copy of the package end to end once it has changed it — only to
+check that it still runs; results are compared once, in task 3.
+
+1. **Minimize** → **`deidentify:minimize-variables`**: keep only what the reachable code
+   uses (static read), one drop round; re-run (the run decides: what it misses is put back).
+   First, because every variable it drops is one the audit no longer has to look at.
+2. **Audit PII and ids, then clean up**:
+   - **audit** → **`deidentify:audit-pii`** (and **`deidentify:check-id-order`**) on the
+     minimised data: the *before clean-up* workbook — PII shortlist, other surfaces, string
+     tails; for ids, the code scan (does the code rely on id order?) and, if the ids are
+     already scrambled, the id maps and leak tests;
+   - **clean up**, with the user's decisions: **`deidentify:strip-pii`** for the confirmed
+     PII, notes/characteristics, code defects; **`deidentify:scramble-ids`** if ids must be
+     (re)scrambled, the method chosen from the code scan; re-run;
+   - **audit again**: the *after clean-up* workbook — the PII audit plus what the clean-up
+     removed, and the id audit only if ids were scrambled in the clean-up.
+3. **Compare** → **`deidentify:compare-code-results`**: (1) the original package against the
+   cleaned one, every output file; (2) the cleaned package against the paper or the internal
+   package.
 
 ## Finish — ship clean, and write two readmes
 
@@ -102,6 +102,11 @@ Build a shared picture before touching anything:
   expected outputs. Mention de-identification only in one line ("IDs are
   anonymized"); it should read like a normal code package, not a redaction
   log.
+- **A new `CHANGES.txt`** (inside the public package): the previous one updated for this
+  release — the per-dataset table of variables kept out of the original count recomputed
+  after the drop, statements the audit found wrong corrected — plus a section listing every
+  code line changed (file, line, before, after), so the package carries one complete record
+  of its changes rather than separate diff files.
 - **Private processing readme** (with the processing code, never shipped): the
   full audit trail — what counted as PII and how each field was handled, the
   scramble design and seed, variables dropped, any section omitted and why, the

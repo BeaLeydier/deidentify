@@ -29,3 +29,20 @@ def write_sheet(xlsx, name, header, rows):
         ws.append([_clean(v) for v in r])
     os.makedirs(os.path.dirname(os.path.abspath(xlsx)), exist_ok=True)
     wb.save(xlsx)
+
+def arrange(xlsx, layout):
+    """Put the tabs of a workbook in the order of `layout` and give them its names.
+    layout: list of (current tab name, new tab name); tabs not in it keep their place after the
+    listed ones, tabs listed but absent are skipped. Used last, once every tool has written its
+    tab, e.g. [("README","README"), ("summary","summary"), ("likely_pii","1. likely_pii"), ...]."""
+    wb = load_workbook(xlsx)
+    order = []
+    for old, new in layout:
+        if old in wb.sheetnames:
+            ws = wb[old]
+            ws.title = new[:31]
+            order.append(ws)
+    rest = [ws for ws in wb.worksheets if ws not in order]
+    wb._sheets = order + rest
+    wb.active = 0
+    wb.save(xlsx)

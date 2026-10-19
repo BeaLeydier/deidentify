@@ -17,7 +17,14 @@ description: >-
 Conventions (every step a script in the project's `code/`, paths from one config, one
 workbook with a `result` cell, loud failure): `shared/conventions.md`.
 
-Confirm the cleaned package reproduces results. Every comparison produces a
+Confirm the cleaned package reproduces results. Two comparisons, no more:
+1. **the original package against the cleaned one** — every output file of the package as
+   received (run here, with only the edits needed to run it) against the cleaned package's
+   (`shared/compare_before_after.py`): what the whole clean-up changed;
+2. **the cleaned package against the reference** — the published paper, or the internal
+   (identified) package run on the same machine: does it reproduce the results.
+Intermediate runs during the work (after dropping variables, after a code fix) only check
+that the package runs end to end; their outputs are not compared. Every comparison produces a
 full side-by-side table **and** a summary — never just a headline check — and all
 of them end up in **one comparison workbook** (tabs: summary, tables, appendix,
 in-text, figures, before-vs-after).
@@ -70,13 +77,14 @@ and 0.0000 % differing pixels is the standard. Stata's `.gph` working files embe
 timestamps and in-memory object handles that differ on every run; ignore those
 lines (`compare_before_after.py` does).
 
-## Before vs after a change to the package
+## Original against cleaned package
 
-After minimisation or any edit, snapshot the output folders, re-run, and compare every
+Snapshot the output folders of the original package's run and of the cleaned package's run, and compare every
 file with `shared/compare_before_after.py BEFORE_DIR AFTER_DIR <workbook> [tab]` (text
 outputs with timestamps stripped, PDFs/EPS on content, `.gph` on content minus Stata's
-object handles). "N of N identical, 0 differ, 0 missing" is the proof that the change
-altered nothing.
+object handles). "N of N identical, 0 differ, 0 missing" is the proof that the clean-up
+altered nothing; full-precision exports differing only beyond the 6th significant digit are
+"same up to numerical precision" — say so, do not call them identical.
 
 ## Run the comparison (systematic, every estimate)
 

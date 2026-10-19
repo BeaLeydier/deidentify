@@ -3,13 +3,12 @@
 *   $DATADIR   folder with the RELEASE datasets     $DTALIST  text file, one dataset path per line
 *   $XWALK     folder with the crosswalk .dta files (private, read-only)
 *   $WATCH     PRIVATE folder for the watch lists (re-identification keys: never shipped)
-*   $WORKBOOK  the review workbook; tabs id_watchlist_sizes, identifier_variables,
-*              id_crossref_numeric, id_crossref_string, id_mergeback_rowtest
+*   $WORKBOOK  the review workbook; tabs id_watchlist_sizes, id_crossref_numeric (one row per
+*              tested variable), id_crossref_string, id_mergeback_rowtest
 *   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old col> <new col>"
 *   $IDVARS_fam1 "var1 var2 ...": the user's ID inventory -- the variables of that family
-*              (every dataset holding the name). Required: ask the user for it. Variables
-*              whose name contains a family word but that are NOT listed are reported as
-*              candidates (not tested) for the user to accept or reject.
+*              (every dataset holding the name). Required: ask the user for it. Id-like
+*              variables NOT listed are reported by pii_surfaces (tab id_candidates).
 * Watch lists (from the crosswalks): ALL OLD, ALL NEW (the image) and OLD-ONLY (old ids that are
 *   never a legal new value); their sizes and overlap say how informative test 1 is.
 * Test 1 (per listed variable, distinct values): n_outside_image (not a legal new id) and
@@ -61,10 +60,8 @@ foreach fam of global IDFAMS {
 }
 file close `S'
 * ---- Part B: tests ----
-tempname ID T1 T2 T3
-tempfile F_identifier_variables F_id_crossreference_numeric F_id_crossreference_string F_id_mergeback_rowtest
-file open `ID' using `F_identifier_variables', write replace
-file write `ID' "dataset,variable,family,source,storage_type,n_nonmiss,n_distinct,kept_as_identifier,reason" _n
+tempname T1 T2 T3
+tempfile F_id_crossreference_numeric F_id_crossreference_string F_id_mergeback_rowtest
 * the inventory is required
 foreach fam of global IDFAMS {
     if `"${IDVARS_`fam'}"' == "" {
@@ -105,15 +102,6 @@ while r(eof)==0 {
                 }
             }
         }
-        * 2. the name scan: candidates (name contains the family word), reported, not tested
-        if "`fam'"=="" {
-            foreach f of global IDFAMS {
-                if "`fam'"=="" & strpos("`lv'", strlower("`f'")) {
-                    local fam "`f'"
-                    local src "scan"
-                }
-            }
-        }
         if "`fam'"=="" continue
         local ty : type `v'
         capture confirm numeric variable `v'
@@ -129,15 +117,9 @@ while r(eof)==0 {
                 local nd = _N
             restore
         }
-        if "`src'"=="scan" {
-            file write `ID' `""`rel'","`v'","`fam'","scan","`ty'",`nnm',`nd',0,"name-scan candidate NOT in the user inventory: accept (add to IDVARS_`fam') or reject""' _n
-            continue
-        }
         if !`isnum' {
-            file write `ID' `""`rel'","`v'","`fam'","`src'","`ty'",`nnm',`nd',0,"string variable (covered by test 2)""' _n
             continue
         }
-        file write `ID' `""`rel'","`v'","`fam'","inventory","`ty'",`nnm',`nd',1,"identifier (user inventory)""' _n
         if `nnm'==0 continue
         * ---- Test 1 ----
         preserve
@@ -226,14 +208,13 @@ while r(eof)==0 {
     file read IN line
 }
 file close IN
-file close `ID'
 file close `T1'
 file close `T2'
 file close `T3'
 * ---- write the tabs ----
 import delimited using `WS', clear varnames(1) stringcols(1)
 export excel using "$WORKBOOK", sheet("id_watchlist_sizes") sheetreplace firstrow(variables)
-foreach t in identifier_variables id_crossreference_numeric id_crossreference_string id_mergeback_rowtest {
+foreach t in id_crossreference_numeric id_crossreference_string id_mergeback_rowtest {
     import delimited using `F_`t'', clear varnames(1) stringcols(_all) bindquote(strict)
     if _N == 0 set obs 1
     local sh = subinstr("`t'", "crossreference", "crossref", 1)

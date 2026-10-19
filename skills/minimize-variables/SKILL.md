@@ -84,7 +84,9 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    through a macro-built name, ``ch`x'_bmi``, cannot be edited safely) — keep the others. Snapshot the outputs
    of the run copy *before* the drop, run the package's master end to end after it, and
    compare every output file (`shared/compare_before_after.py`): 0 errors and all files
-   identical is the proof. When the run halts it names what the static read missed (a
+   identical is the proof. Inside a full de-identification (code-package) this run only
+   checks the package still runs; the outputs are compared once, original against cleaned
+   package, at the end. When the run halts it names what the static read missed (a
    macro-built name it could not fill in, a chain of renames): automate the put-back with
    `scripts/restore_missing.py` in a loop (rebuild the copy, drop, run; on a halt, put the
    variable back and go again), and list every variable put back, with the line that
