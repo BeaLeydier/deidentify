@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# restore_missing.py LOG VARUSAGE.xlsx KEEP_BACK.txt [STRUCTURAL_RENAMES.txt]
+# restore_missing.py LOG VARUSAGE.xlsx KEEP_BACK.txt [STRUCTURAL_RENAMES.txt [DOFILES.txt]]
 # The re-run is the arbiter of the static read. If the run of the minimised copy halted on
 # "variable X not found" (LOG = the package run's Stata log), put back what the static read
 # missed and exit 0, so the master rebuilds the copy, drops again without those variables
@@ -18,6 +18,8 @@ from openpyxl import load_workbook
 log = open(sys.argv[1], encoding="latin-1").read().split("\n")
 VARUSAGE, KB = sys.argv[2], sys.argv[3]
 RENAMES = sys.argv[4] if len(sys.argv) > 4 else ""
+if len(sys.argv) > 5:
+    DOFILES = sys.argv[5]
 first = next((i for i, l in enumerate(log) if re.match(r"^r\(\d+\);", l)), None)
 if first is None:
     sys.exit(0)
@@ -66,6 +68,33 @@ if m and m.group(1) not in dropped and "*" not in m.group(1):
                 f.write(f"{v}|run halted without {m.group(1)}, the name it is renamed to: {ctx[:120].replace('|', '/')}\n")
         print(f"put back {len(hits)} variables ending in {m.group(1)}")
         sys.exit(0)
+if not m or m.group(1) not in dropped:
+    # the failing command itself (with its "> " continuation lines) names a dropped variable:
+    # e.g. a dropped h_s1bq8 that Stata then abbreviates to h_s1bq8_other in a rename
+    k = max((i for i in range(max(0, first - 40), first) if re.match(r"^(\. |\s+\d+\. )", log[i])), default=None)
+    if k is not None:
+        cmd = " ".join([log[k]] + [l[2:] for l in log[k + 1:first] if l.startswith("> ")])
+        named = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", re.sub(r'"[^"]*"', " ", cmd)))
+        done0 = {l.split("|")[0] for l in open(KB if "KB" in globals() else f"{DELIV}/minimize/keep_back.txt").read().split("\n")[1:] if l}
+        # names the halting do-file creates by wildcard renames (rename hm1* h*): the originals
+        calls0 = [re.search(r'(?:do|include|run)\s+"?([^"]*?([^/"]+\.do))"?', l) for l in log[:first]
+                  if re.match(r"^(\.|\s+\d+\.)\s+(do|include|run)\s", l) and "master-directory" not in l]
+        calls0 = [c for c in calls0 if c]
+        dofiles = [l.strip() for l in open(DOFILES if "DOFILES" in globals() else f"{DELIV}/minimize/dofiles.txt") if l.strip()]
+        if calls0:
+            src = [f for f in dofiles if os.path.basename(f) == calls0[-1].group(2)]
+            pairs = re.findall(r"(?m)^\s*ren(?:ame)?\s+([A-Za-z0-9_]+)\*\s+([A-Za-z0-9_]*)\*", open(src[0], encoding="latin-1").read()) if src else []
+            for n in list(named):
+                for a, b in pairs:
+                    if n.startswith(b):
+                        named.add(a + n[len(b):])
+        hits = sorted((named & dropped) - done0)
+        if hits:
+            with open(KB if "KB" in globals() else f"{DELIV}/minimize/keep_back.txt", "a") as f:
+                for v in hits:
+                    f.write(f"{v}|named in the command that halted: {cmd.strip()[:120].replace('|', '/')}\n")
+            print(f"put back {', '.join(hits)} (named in the halting command)")
+            sys.exit(0)
 if not m or m.group(1) not in dropped:
     # last resort: the do-file that halted (the last `do`/`include` of a package do-file before
     # the error); put back every dropped variable it names (structural-only, wildcard-only).
