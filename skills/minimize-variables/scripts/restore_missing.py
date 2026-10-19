@@ -29,10 +29,19 @@ for l in reversed(log[max(0, first - 3):first]):
 dropped = {r[1] for r in list(load_workbook(VARUSAGE, read_only=True)["dropped"].iter_rows(values_only=True))[1:]}
 # a name a dropped variable would have been renamed to (05a took the pair out of a rename)
 ren = {}
-if os.path.exists(RENAMES):
-    ren = dict(l.strip().split("|")[::-1] for l in open(RENAMES) if "|" in l)
+RF = RENAMES if "RENAMES" in globals() else f"{DELIV}/minimize/structural_renames.txt"
+if RF and os.path.exists(RF):
+    for l in open(RF):
+        if "|" in l:
+            o, n = l.strip().split("|")
+            ren.setdefault(n, []).append(o)
 if m and m.group(1) in ren:
-    m = re.match(r"(.*)", ren[m.group(1)])
+    olds = sorted(set(ren[m.group(1)]))
+    with open(KB if "KB" in globals() else f"{DELIV}/minimize/keep_back.txt", "a") as f:
+        for o in olds:
+            f.write(f"{o}|renamed to {m.group(1)}, which a later line names\n")
+    print(f"put back {', '.join(olds)} (renamed to {m.group(1)})")
+    sys.exit(0)
 # a wildcard whose every match was dropped (rename tr1_s1* *): put back what it matches
 if m and "*" in m.group(1):
     import fnmatch
