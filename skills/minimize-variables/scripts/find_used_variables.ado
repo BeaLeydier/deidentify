@@ -21,7 +21,7 @@
 * (sum s*) on other lines still count.
 *
 * For the reviewer, in which command CONTEXT each reference occurs:
-*   calc_context    the variable (or the name it acquires through a wildcard rename A* B*)
+*   calc_context    the variable (or the name it acquires through a rename, exact or A* B*)
 *                   is referenced by a command that computes with it (gen, replace, egen,
 *                   regressions, summarize, collapse, ...), as opposed to a purely structural
 *                   command (keep, drop, order, rename, merge/keepusing, sort, ...)
@@ -86,7 +86,7 @@ program define find_used_variables
     frame `TOK': levelsof tok if usable & !iswild & iscalc, local(EXACTCALC) clean
     frame `TOK': levelsof tok if usable & iswild & iscalc,  local(STUBSCALC) clean
     frame `TOK': levelsof rng if rng!="", local(RANGES) clean
-    * rename A* B* pairs (old pattern has a wildcard): oldpat newpat
+    * rename pairs (exact or wildcard): oldpat newpat
     local NREN = 0
     frame `TOK' {
         quietly count if renold!=""
@@ -194,7 +194,7 @@ program define find_used_variables
                     else if "`sib'"!="endpoint" local sib = string(min(real("`sib'"), `n'))
                 }
             }
-            * names acquired through wildcard renames: rename OLD* NEW* -> NEWprefix + suffix
+            * names acquired through renames: rename old new, rename OLD* NEW* -> NEWprefix + suffix
             if `u'==1 & `calc'==0 {
                 forvalues i = 1/`NREN' {
                     local ro "`RO`i''"
@@ -583,15 +583,25 @@ void _fuv_tokens(string scalar listfile, string scalar root)
                     }
                 }
                 if (cmd == "rename" | cmd == "ren") {
-                    ws = tokens(ustrregexra(s, "[^A-Za-z0-9_*]", " "))
-                    if (cols(ws) >= 3) {
-                        w1 = ws[2]; w2 = ws[3]
-                        // rename OLD* NEW* (family rename) or rename OLD*pattern newname (a
-                        // macro-built name renamed to a fixed name inside a loop): every variable
-                        // matching OLD is mapped to the name it carries afterwards
-                        if (strpos(w1,"*")) {
-                            allro = allro \ w1
-                            allrn = allrn \ w2
+                    // every variable matching OLD is mapped to the name it carries afterwards,
+                    // so a use of the new name counts as a use of the old one:
+                    //   rename old new | rename OLD* NEW* (family) | rename OLD*pat newname
+                    //   (a macro-built name renamed to a fixed name in a loop) | rename (a b) (c d)
+                    if (ustrregexm(s, "ren[a-z]*[ ]*[(]([^)]*)[)][ ]*[(]([^)]*)[)]")) {
+                        w1 = ustrregexs(1)
+                        w2 = ustrregexs(2)
+                        ws = tokens(ustrregexra(w1, "[^A-Za-z0-9_*]", " "))
+                        g = tokens(ustrregexra(w2, "[^A-Za-z0-9_*]", " "))
+                        if (cols(ws) == cols(g) & cols(ws) > 0) {
+                            allro = allro \ ws'
+                            allrn = allrn \ g'
+                        }
+                    }
+                    else {
+                        ws = tokens(ustrregexra(s, "[^A-Za-z0-9_*]", " "))
+                        if (cols(ws) >= 3) {
+                            allro = allro \ ws[2]
+                            allrn = allrn \ ws[3]
                         }
                     }
                 }
