@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """compare_figures.py -- are two sets of figure PDFs the same picture?
 
-Usage: compare_figures.py REF_DIR NEW_DIR OUT.csv [SCRATCH_DIR]
+Usage: compare_figures.py REF_DIR NEW_DIR WORKBOOK.xlsx WORK_DIR
+       (WORK_DIR: a folder of the project for the rendered pages; tab `figures` of WORKBOOK)
 
 Two levels, per file name present in both folders:
   1. content streams: the PDF's printable text minus CreationDate/ModDate/Producer/Creator lines;
@@ -13,9 +14,11 @@ machines, font family and page scaling dominate (a 4-7% pixel difference from fo
 between Windows- and macOS-built Stata figures). If the reference was built elsewhere, re-run the
 reference package's figure code locally first, then compare.
 """
-import os, subprocess, csv, sys
-ref, new, out = sys.argv[1], sys.argv[2], sys.argv[3]
-scratch = sys.argv[4] if len(sys.argv) > 4 else "/tmp/figcmp"
+import os, subprocess, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [HERE, os.path.join(HERE, "..", "..", "..", "shared")]
+from xlsx_sheet import write_sheet
+ref, new, out, scratch = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 os.makedirs(scratch, exist_ok=True)
 
 def content_stream(path):
@@ -41,6 +44,5 @@ for fn in sorted(os.listdir(ref)):
         pct = f"n/a ({type(e).__name__})"
     rows.append([fn, "identical" if same else "differs", pct])
     print(f"{fn}: content {'identical' if same else 'DIFFERS'}, pixels differing {pct}%")
-with open(out, "w", newline="") as f:
-    csv.writer(f).writerows([["figure", "pdf_content_stream", "pct_pixels_differing"]] + rows)
+write_sheet(out, "figures", ["figure", "pdf_content_stream", "pct_pixels_differing"], rows)
 sys.exit(0 if all(r[1] == "identical" for r in rows) else 1)

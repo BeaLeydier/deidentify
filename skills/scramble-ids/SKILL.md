@@ -25,55 +25,27 @@ the code, so that a scrambling of the ID order does not affect the results.
 
 ## Steps
 
-`scripts/scramble_id.ado` is a standalone command (`adopath + "<scripts>"`, then
-call it); `scripts/scan_id_order_dependence.py` is the diagnostic that comes
-first; `scripts/verify_scramble.do` is an adaptable **template** you copy and
-edit per package. This skill assumes the data are for **public release**: the map
-is random. An order-preserving ("monotone") map would be trivially reversible by anyone
+Conventions (every step a script in the project's `code/`, one workbook, loud failure):
+`shared/conventions.md`. `scripts/scramble_id.ado` is a standalone command
+(`adopath + "<scripts>"`, then call it); `scripts/verify_scramble.do` is a **template**
+you copy and adapt per package. This skill assumes the data are for **public release**:
+the map is random. An order-preserving ("monotone") map is trivially reversible by anyone
 holding the original ids (one sort and a rank merge) and is not an option here.
 
-Everything below starts from the **user's ID inventory**
-(`code-package/references/id-inventory.md`): which variables are ids, of which
-entity, in which files, which are parts of a composite key or derived by a rule,
-which pairs are the same kind of id from two sources, and which cutoffs the code
-applies. Ask for it before touching the data. The data can suggest additions (a
-variable that uniquely identifies rows, two variables with identical value sets)
-— put them to the user; a scan never decides on its own what an id is or that two
-ids share a universe.
+Everything starts from the **user's ID inventory** (`shared/id-inventory.md`): which
+variables are ids, of which entity, in which files, which are parts of a composite key or
+derived by a rule, which pairs are the same kind of id from two sources, and which cutoffs
+the code applies. Ask for it before touching the data. The data can suggest additions (a
+variable that uniquely identifies rows, two variables with identical value sets) — put
+them to the user; a scan never decides on its own what an id is or that two ids share a
+universe.
 
-0. **Diagnose whether the code depends on id order — before designing the map.**
-   Run `scripts/scan_id_order_dependence.py OUT.csv "<id vars from the inventory>" <reachable do-files>`
-   (reachable = the files the master actually runs; see `minimize-variables`).
-   It strips comments and classes every hit:
-   - **A magnitude** — the id's value is compared or binned (e.g. `if regionid > 154`,
-     `inrange(id,…)`, `recode id`). A random map breaks this.
-   - **B numbering** — numbers derived from the id's sort order feed the code
-     (`egen group(id)`, `tab id, gen()`, `encode`, `levelsof` with a counter) and
-     the code then names them (e.g. `D_regionid_84`): dummy k is "the k-th smallest
-     id", not an entity.
-   - **C position** — a row is picked by position after sorting on the id (`sort id`
-     then `_n`, `[1]`, `duplicates drop`, `collapse (first)`, `keep in`, `sample`).
-   - **D invariant** — `bysort id:` sums, `xtset`, merge keys, `cluster(id)`,
-     `i.id`: a 1-to-1 relabel cannot change these (listed for completeness).
-   Most B/C hits are benign in practice; the scan says where to look, the
-   **arbiter is empirical**: apply a random map to a copy, run the package, and
-   compare every output with the pre-scramble run (`compare-code-results`,
-   `compare_before_after.py`). Identical outputs = no dependence, done. Otherwise
-   the differing tables name the do-files, and the fixes are, weakest first:
-   - **banded scrambling** for a cutoff: with a cutoff at 154, say,
-     `scramble_id … , cuts(154)` maps old values ≤ 154 and > 154 into two disjoint
-     slices, randomly *within* each; rewrite the cutoff once to the slice boundary
-     the program prints (e.g. `> 16000`). The cutoff survives; the order inside each
-     band does not;
-   - **ship the indicator instead of the rule**: replace the condition (`if id > 154`)
-     or the numbered dummy (`D_regionid_84`) by a variable (e.g. `treated_region`,
-     `cutoff_group`) built once from the original ids and shipped; rewrite the line
-     to use it;
-   - **rewrite order-derived numbering**: dummies by value from an explicit list
-     (`gen d_x = id==<mapped value>`), loops over the mapped values;
-   - **fix tie-breaking, not the map**: for example, an explicit rule instead of `duplicates drop`.
-   Record which hits were found, which fix was applied, and the arbiter's result in
-   the private processing readme. The public readme says nothing about the method.
+0. **Decide the method with `check-id-order` first.** It scans the code for uses of an
+   id's value or order (cutoffs, numbering by rank, picks by position) and runs the
+   empirical test (random relabel on a copy, run, compare every output). Identical
+   outputs → fully random maps. Otherwise it names the fixes: a banded map for a cutoff
+   (`scramble_id …, cuts()` below), a shipped indicator, explicit numbering, a tie-break.
+   Apply the code fixes in the release copy and record them in the private notes.
 
 1. **Build one correspondence table per ID — seeded, random, 1-to-1, new
    range.** Load the id's old values into a variable `oldval` (for an id spanning
@@ -123,28 +95,16 @@ ids share a universe.
    `references/editing-dofiles.md` for the mechanics (read verbatim with Mata
    `cat()`, match ID names on `_`-aware word boundaries, write literal `$`/`"`).
 
-5. **Verify — fail-loud, to one workbook.** Copy and adapt
-   `scripts/verify_scramble.do` (a template — the datasets/keys/composite keys are
-   package-specific). It runs, per id map, the 1-to-1 / new-range-disjoint checks
-   and the **rank-retention** check (Spearman ρ between old and new; ≈ 0 expected,
-   a high |ρ| means order was preserved and is reported as a weakness), plus a **whole-dataset diff over ALL variables** (not a pre-selected
-   subset) that *shows* the only changes are the renamed ids plus any intended
-   redaction, and catches silent corruption (e.g. a stray `_merge`). For that diff,
-   first merge the idmap into the original so both share the scrambled key, and
-   **align by that key, never by row position** — merges re-sort, so `_n`-alignment
-   reports false mismatches. It writes ONE workbook (`verify_review.xlsx`: sheets
-   `idmap_checks`, `dataset_diffs`, `summary` with a `result` cell) and, on failure,
-   drops a `verify_FAILED.flag` sentinel. **Detection contract:** check the sentinel /
-   the `result` cell — **not** the process exit code, because Stata batch returns 0
-   even on `exit 459` (that `exit` still halts an in-Stata do-file chain).
+5. **Verify — to one workbook.** Copy and adapt `scripts/verify_scramble.do` (a
+   template — the datasets, keys and composite keys are package-specific). Per id map:
+   1-to-1, new range disjoint from the old, inside the intended range; then a
+   **whole-dataset diff over ALL variables** (not a pre-selected subset) that shows the
+   only changes are the renamed ids plus any intended redaction, and catches silent
+   corruption (e.g. a stray `_merge`). For that diff, merge the idmap into the original
+   so both share the scrambled key and align by that key, never by row position. Tabs
+   `idmap_checks`, `dataset_diffs`, `summary` (with the `result` cell). Then run
+   `check-id-order` in audit mode on the maps: the rank correlation of each map, the
+   overlap of old and new values.
 
-6. **Smoke-test the run.** Run the updated package end-to-end once
-   (`stata-se -b do <master>.do`) to confirm it still executes after the ID swap.
-   Concurrent code usually runs unchanged; in the rare case a run halts on a Stata
-   version issue, the modernization catalogue lives in the **`deidentify:compare-code-results`**
-   skill. This is an "it runs" check; the numeric proof is `compare-code-results`.
-
-## Output convention
-Every export is systematic: the full ID-reference review sheet and the full
-`verify_results` (one row per check) **plus** a summary (checks passed/failed,
-maps built, datasets touched).
+6. **Run the package once** after the swap to confirm it executes; the numeric proof
+   (every output identical to the original's) is `compare-code-results`.

@@ -5,21 +5,26 @@ code packages and datasets, and for proving a cleaned package still
 reproduces its results. Skills are language-agnostic in method; examples are shown
 in Stata (`.do`/`.dta`).
 
-Each skill produces **one review workbook** (`.xlsx` with tabs — a summary, detail,
-and columns for the reviewer to fill) rather than scattered files, and flags fail
-*hard*: Python tools exit nonzero; Stata programs write a `result` cell and a
-`*_FAILED.flag` sentinel (Stata batch always returns OS exit 0). Requirements: Stata
-16+ for the `.ado`/`.do` tools; Python 3 with **pandas + openpyxl** for the
-workbook builders, plus **Pillow + numpy** and poppler's `pdftoppm` for the figure
-comparison. Every step of an audit is meant to live as a reviewable script in the
-deliverable's `code/` folder (see `skills/code-package/references/deliverable-layout.md`).
+Each skill produces **one review workbook** (`.xlsx`: a summary with a `result` cell,
+full row-level tabs, columns for the reviewer to fill), written directly by the tools,
+and fails loud (Python tools exit nonzero; Stata steps write `FAIL` in the `result` cell).
+Every step of a project is meant to live as a reviewable script in the project's
+`code/` folder, with all paths relative to the project and packages installed inside it,
+so the whole audit re-runs from the project folder alone (`shared/conventions.md`).
+Requirements: Stata 16+ for the `.ado`/`.do` tools; Python 3 with **openpyxl** (plus
+**Pillow + numpy** and poppler's `pdftoppm` for the figure comparison).
+
+`shared/` holds what several skills use: the conventions, the ID-inventory spec, and
+small standalone tools (`reachable_dofiles.py`, `compare_before_after.py`,
+`xlsx_sheet.py`).
 
 ## Skills
 
 | Skill | Invoke as | Purpose |
 |---|---|---|
-| Orchestrator | `/deidentify:code-package` | Maps the package and sequences the five skills below, then ships clean + writes the two readmes. |
-| Audit PII | `/deidentify:audit-pii` | Classify every variable (identifier / likely PII / other) with `pii_classify`, summarise the other surfaces (notes, characteristics, value labels), scan string-tail bytes, and, with the private crosswalks (if the user has access to them), prove no original id survives. One review workbook. Read-only. |
+| Orchestrator | `/deidentify:code-package` | Maps the package and sequences the six skills below, then ships clean + writes the two readmes. |
+| Audit PII | `/deidentify:audit-pii` | Classify every variable (identifier / likely PII / other) with `pii_classify`, summarise the other surfaces (notes, characteristics, value labels) with `pii_surfaces`, scan string-tail bytes, and, with the private crosswalks (if the user has access to them), prove no original id survives. One review workbook. Read-only. |
+| Check id order | `/deidentify:check-id-order` | Does the code use an id's value or order (static scan + random-relabel test)? How much order does an old→new map keep (rank correlation, overlap)? Before scrambling, to choose the method; after, to audit it. |
 | Strip PII | `/deidentify:strip-pii` | Drop or overwrite confirmed PII with a clean overwrite (no residual "ghost tail"). |
 | Scramble IDs | `/deidentify:scramble-ids` | Seeded 1-to-1 ID correspondence tables (kept private), code update, fail-loud verification. |
 | Minimize variables | `/deidentify:minimize-variables` | Keep only variables the reachable code uses (comments ignored); class each variable by how it is used; static read of the do-files (case-sensitive, literal macros filled in, `gen` targets ignored); drop in one round, proven by re-running; `referenced_in` per variable. |
@@ -45,7 +50,7 @@ auto-triggers on its own description. The orchestrator ties them together.
 
 Every skill starts from an **ID inventory supplied by the user** — which variables
 identify which entities, in which files, with which composite/derived rules, and how
-the datasets link (`skills/code-package/references/id-inventory.md`). Scans of the
+the datasets link (`shared/id-inventory.md`). Scans of the
 data only add *candidates* to that inventory; they never override it.
 
 

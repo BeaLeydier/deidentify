@@ -7,15 +7,20 @@ two packages are frequently written by **different people** with different
 conventions and dependencies. So expect to adapt a run here.
 
 ## Run Stata headless and find errors
+See `shared/conventions.md` §3 (batch mode, where the log lands, `r(…)` lines, exit code 0).
 
-```bash
-"/Applications/Stata/StataSE.app/Contents/MacOS/stata-se" -b do FILE.do
-```
-- The log lands in `FILE.log`. Scan it: `grep -nE "r\([0-9]+\);" FILE.log` — an
-  `r(NNN);` is an error that halted the run.
-- **No `timeout` on stock macOS** (that's `gtimeout`); don't wrap Stata in it —
-  you'll get exit 127 and a stale log. Use your tool's own timeout.
-- Batch Stata returns OS exit 0 even on error, so read the log, not the exit code.
+## Portability defects to report (not silently fix)
+Examples met in practice — illustrations, not a checklist of expected findings:
+- Windows backslash paths in do-files (`"$root\data\x.dta"`): r(601) on macOS/Linux.
+- `ssc install <pkg>` for a package that lives on the Stata Journal (`zanthro` →
+  `dm0004_1`, `dropmiss` → `dm89_2`); an un-captured `which` after it stops the run.
+- An installer that misses a dependency the code needs (a command used but never
+  installed, or the dependency of a newer version of an installed one, e.g. `reghdfe` ≥ 6
+  needs `require`): the run only works where it happens to be installed already. Run with
+  a project-local, empty package folder to see it.
+- A bundled `ado/` folder never added to the adopath, so the code depends on a web install.
+- The release's root global pointing at the *internal* identified folder.
+- An unexpanded macro left in a variable label (``Value: `label_x' ``).
 
 ## Runnability fixes (running code written for another Stata / by someone else)
 
@@ -80,8 +85,8 @@ Then insert `post` lines after matched estimation lines and write the file out w
 4. **Sort-order / id-magnitude dependence** after ids were scrambled: order-dependent
    estimators (UJIVE, resampling with `set seed` after a `sort`), `if id > k` cutoffs,
    `egen group(id)` / `tab id, gen()` numbering, `_n`/`[1]`/`duplicates drop` after
-   `sort id`, `sample`. Diagnose with `scramble-ids/scripts/scan_id_order_dependence.py`;
-   the fix belongs in the code or the map bands, never in an order-preserving map.
+   `sort id`, `sample`. Diagnose with the `check-id-order` skill; the fix belongs in the code or
+   the map bands, never in an order-preserving map.
 5. Tie-breaking without `set sortseed` (results differ run to run, not only package
    to package).
 6. An adaptation made to run the package (path fix, replaced command, skipped step).

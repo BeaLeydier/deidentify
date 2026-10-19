@@ -10,13 +10,17 @@ are carried through from REFERENCE for context: `decimals` (reported precision, 
 row), `stat` (coef/se/p/N/R2/test), and any metadata (exhibit, panel, row, ...).
 
 Usage:
-    python3 compare_tables.py REF.csv NEW.csv [OUT_DIR] [--tol 1e-9]
+    python3 compare_tables.py REF.csv NEW.csv WORKBOOK.xlsx [NAME] [--tol=1e-9]
+    (writes tabs <NAME>_summary and <NAME> of WORKBOOK; NAME defaults to `tables`)
 
 Language-agnostic: produce the two CSVs from any tool (Stata `export delimited`,
 R `write.csv`, pandas). A cell matches when the new value rounds to the reference
 value at `decimals` places (if given), else when |diff| <= tol.
 """
 import csv, os, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [HERE, os.path.join(HERE, "..", "..", "..", "shared")]
+from xlsx_sheet import write_sheet
 
 def load(path):
     rows = {}
@@ -35,9 +39,10 @@ def main():
     for a in sys.argv[1:]:
         if a.startswith("--tol"): tol = float(a.split("=",1)[1]) if "=" in a else tol
     if len(args) < 2:
-        sys.exit("usage: compare_tables.py REF.csv NEW.csv [OUT_DIR] [--tol=1e-9]")
+        sys.exit("usage: compare_tables.py REF.csv NEW.csv WORKBOOK.xlsx [NAME] [--tol=1e-9]")
     ref, new = load(args[0]), load(args[1])
-    outdir = args[2] if len(args) > 2 else "."
+    xlsx = args[2] if len(args) > 2 else "comparison_review.xlsx"
+    name = args[3] if len(args) > 3 else "tables"
 
     meta_cols = [c for c in next(iter(ref.values())).keys() if c not in ("value",)]
     keys = list(dict.fromkeys(list(ref) + list(new)))
@@ -70,34 +75,21 @@ def main():
         full.append(row)
 
     cols = ["key"] + [c for c in meta_cols if c != "key"] + ["reference","new","difference","status","reason"]
-    # ONE review workbook: `summary` tab + `full` tab (with an empty `reason` column
-    # for the reviewer to fill on each flagged cell).
-    from openpyxl import Workbook
-    wb = Workbook()
-    ws = wb.active; ws.title = "summary"
-    ws.append(["metric", "value"])
-    ws.append(["total cells", len(full)])
-    ws.append(["exact", n_exact])
-    ws.append(["differs", n_diff])
-    ws.append(["missing (one side)", n_missing])
-    ws.append(["pct exact", round(100*n_exact/max(1, len(full)-n_missing), 2)])
-    ws.append(["result", "PASS" if not (n_diff or n_missing) else "REVIEW"])
-    ws.append([])
-    ws.append(["by stat", "exact / differs / missing"])
-    for s, (e, d, m) in sorted(by_stat.items()):
-        ws.append([s, f"{e} / {d} / {m}"])
-    wf = wb.create_sheet("full")
-    wf.append(cols)
-    for r in full:
-        wf.append([r.get(c, "") for c in cols])
-    wb.save(f"{outdir}/comparison_review.xlsx")
+    summ = [["total cells", len(full)], ["exact", n_exact], ["differs", n_diff],
+            ["missing (one side)", n_missing],
+            ["pct exact", round(100*n_exact/max(1, len(full)-n_missing), 2)],
+            ["result", "PASS" if not (n_diff or n_missing) else "REVIEW"], ["", ""],
+            ["by stat", "exact / differs / missing"]]
+    summ += [[st, f"{e} / {d} / {m}"] for st, (e, d, m) in sorted(by_stat.items())]
+    write_sheet(xlsx, f"{name}_summary", ["metric", "value"], summ)
+    write_sheet(xlsx, name, cols, [[r.get(c, "") for c in cols] for r in full])
 
     print(f"compared {len(full)} cells: {n_exact} exact, {n_diff} differ, {n_missing} missing")
-    print(f"wrote comparison_review.xlsx (sheets: summary, full) in {outdir}")
+    print(f"wrote tabs {name}_summary, {name} -> {xlsx}")
     # Hard-fail (nonzero exit) so a difference cannot be missed by not reading the log.
     if n_diff or n_missing:
         print(f"FLAG: {n_diff} differing + {n_missing} missing cell(s) need review "
-              f"(fill `reason` in the full sheet)")
+              f"(fill `reason` in the tab)")
         sys.exit(1)
     print("OK: every cell reproduces at the reported precision")
 

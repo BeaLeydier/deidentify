@@ -7,8 +7,8 @@ description: >-
   package or dataset, remove PII before sharing data, prepare code files
   for a journal or repository (AEA, ICPSR, Dataverse, OSF), or verify that a
   cleaned package still reproduces published tables and figures. This is the
-  top-level workflow; it sequences five focused skills (audit-pii, strip-pii,
-  scramble-ids, minimize-variables, compare-code-results) and handles
+  top-level workflow; it sequences six focused skills (audit-pii, strip-pii,
+  check-id-order, scramble-ids, minimize-variables, compare-code-results) and handles
   package mapping and release packaging around them. Examples are shown in Stata
   (.do/.dta); the method is language-agnostic (R/Python/SAS apply the same way).
 ---
@@ -23,7 +23,9 @@ package must reproduce the *original package's own output* to the last decimal.
 
 Work through the stages below, invoking the focused skill named at each step.
 Check in with the user between stages — what counts as PII and how IDs are
-restructured are their decisions.
+restructured are their decisions. Every skill follows `shared/conventions.md`: every
+step is a script in the deliverable's `code/`, all paths come from one config relative
+to the project folder, packages install inside the project, one workbook per skill.
 
 ## Before you start — map the package
 
@@ -33,7 +35,7 @@ Build a shared picture before touching anything:
   which are parts of a composite key or derived from other ids by a rule; which
   are the same kind of id from two sources; the panel/time variables and the
   keys that link the files; any cutoff the code applies to an id. Record the
-  answers in `id_inventory.csv` (`references/id-inventory.md` gives the columns
+  answers in `id_inventory.csv` (`shared/id-inventory.md` gives the columns
   and the precedence rule). Every scan below produces *candidates* to add to this
   inventory; none of them overrides what the user listed. Without an inventory,
   run the scans, show the candidates, and ask again before any id is scrambled.
@@ -53,13 +55,14 @@ Build a shared picture before touching anything:
   the audited folder, and take a SHA-256 manifest of every source folder before
   and after (identical manifests are the proof). `references/deliverable-layout.md`
   gives the deliverable/code-folder layout, the report skeleton and the defects
-  met in practice. Below is an example structure for the deidentification folder. You may have a different one in each use case, but this is a reference point for information.
+  met in practice. An example structure (each project may differ):
   ```
   <root>/            paper (if any) + top-level notes
   <pkg>_orig/        original package, never modified
   <pkg>_deid/        PUBLIC package (data, code, readme, bundled deps)
   <pkg>-deliverable/ report, code/ (every step as a reviewable script), subfolders for each skill, for example: audit/, minimize/, scramble/, strip/, compare. Also add logs/, run/ (the executed copy)
-  scratch/           PRIVATE: watch lists of original ids, crosswalk exports
+  <private>/         PRIVATE: crosswalks, watch lists of original ids (an internal
+                     deliverable may hold the watch lists in a named subfolder)
   ```
 - **Reachable code only.** Which do-files does the master actually run? Calls
   commented out of the master (e.g. GPS steps, R steps) and dead scripts must not
@@ -68,35 +71,32 @@ Build a shared picture before touching anything:
 
 ## The pipeline
 
-1. **Audit PII** → invoke **`deidentify:audit-pii`**. Enumerate every PII surface across all
-   files (string values, PII-bearing numerics, value labels, variable labels/
-   names, notes/characteristics, hidden string-tail bytes, other files) and export
-   a flag report for the user to confirm. Run it again at the end to confirm the
-   cleaned package is clean.
-2. **Strip PII** → invoke **`deidentify:strip-pii`**. For each confirmed PII field, drop it
-   or overwrite with a user-confirmed placeholder — and clear the underlying bytes
-   so no residue remains.
-3. **Scramble IDs** → invoke **`deidentify:scramble-ids`**. Build seeded 1-to-1 ID
-   correspondence tables (kept private), apply them, verify fail-loud, update the
-   analysis code to the new IDs, and smoke-test that the package still runs.
-4. **Minimize variables** → invoke **`deidentify:minimize-variables`**. Keep only variables
-   the reachable code uses (a static read of the do-files), in one round, proven
-   by re-running the package and comparing every output file with a pre-drop
-   snapshot. Do this **before** the confirm audit, so
-   the PII shortlist is as short as it can be.
-5. **Compare results** → invoke **`deidentify:compare-code-results`**. Run the cleaned
-   package and compare every estimate against the original package's output and/or
-   the paper — tables, appendix, in-text numbers, figures (same-machine
-   rendering) — into one comparison workbook with a summary.
-6. **Confirm audit** → `deidentify:audit-pii` again on the minimised, scrambled
-   data: classifier shortlist, surfaces summary, residue, identifier leak tests.
+1. **Audit PII** → **`deidentify:audit-pii`**: every PII surface across all files
+   (string values, PII-bearing numerics, value labels, variable labels/names,
+   notes/characteristics, hidden string-tail bytes, other files) into a review
+   workbook for the user to confirm.
+2. **Strip PII** → **`deidentify:strip-pii`**: drop or overwrite each confirmed field
+   with a user-confirmed placeholder, clearing the underlying bytes.
+3. **Check id order** → **`deidentify:check-id-order`**: does the code use an id's
+   value or order? Static scan plus the empirical relabel test decide the scramble
+   method (random, banded, or a code fix first).
+4. **Scramble IDs** → **`deidentify:scramble-ids`**: seeded 1-to-1 maps (kept
+   private), applied, verified, analysis code updated; then `check-id-order` in audit
+   mode on the maps.
+5. **Minimize variables** → **`deidentify:minimize-variables`**: keep only what the
+   reachable code uses (static read), one drop round proven by a re-run with every
+   output identical. Do this **before** the confirm audit, so the shortlist is short.
+6. **Compare results** → **`deidentify:compare-code-results`**: every estimate against
+   the original package's output and/or the paper (tables, appendix, in-text numbers,
+   same-machine figures) in one comparison workbook.
+7. **Confirm audit** → `deidentify:audit-pii` again on the minimised, scrambled data.
 
 ## Finish — ship clean, and write two readmes
 
 - **Ship clean:** delete generated outputs (figures, intermediates, logs) so the
   public package is inputs + code + readme + bundled dependencies only. Tidy the
-  deliverable too: workbooks and hand-transcribed inputs at the top level,
-  intermediates in `_intermediate/`, superseded files deleted.
+  deliverable too: one workbook per skill and the hand-transcribed inputs, superseded
+  files deleted.
 - **Public code readme** (inside `<pkg>_deid/`): written for someone
   reproducing the results from this package — data, code, how to run, dependencies,
   expected outputs. Mention de-identification only in one line ("IDs are
@@ -107,16 +107,6 @@ Build a shared picture before touching anything:
   scramble design and seed, variables dropped, any section omitted and why, the
   result→code map, and where the private key tables live.
 
-## Output convention (applies to every skill here)
-
-Assume **no one reads the log**. Every result lands in a **file**, in two forms: a
-complete row-level table (every variable / estimate / flag, nothing pre-filtered)
-**and** a summary CSV (counts, % differing, # flagged, `result` PASS/FAIL). Screen
-output stays only as documentation to fold into the readme.
-
-**Fail detection contract:** a check that should be flagged fails *hard* — Python
-tools **exit nonzero**; Stata programs write a `result,FAIL` row and drop a
-`*_FAILED.flag` sentinel (Stata batch always returns OS exit 0, so never rely on
-its exit code — the sentinel / `result` column is the signal, and `exit 459` still
-halts an in-Stata do-file chain). Check the sentinel or the summary's `result`, not
-the log.
+## Output convention
+Every skill writes one review workbook (summary with a `result` cell, full row-level
+tabs, reviewer columns) — `shared/conventions.md` §2.

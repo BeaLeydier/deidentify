@@ -12,13 +12,14 @@ tooling -- it parses the file's own <map> to locate the variable table and data,
 then for every string variable inspects the bytes after each cell's terminator.
 
 Usage:
-    python3 scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]
+    python3 scan_string_tails.py WORKBOOK.xlsx DATASETS.txt [ROOT]
+    (DATASETS.txt: one .dta path per line, relative to ROOT unless absolute)
 
 Outputs:
-    string_tails_full.csv   one row per string cell that has residue (evidence)
-    a `string_tails` sheet appended to the review workbook (per-variable summary)
+    tab `string_tails` of WORKBOOK: one row per string variable of every dataset
+    string_tails_evidence.csv next to WORKBOOK, only if residue is found (one row per cell)
 Exit status is NONZERO if any residue is found (fail-loud), 0 if clean.
-Requires openpyxl for the workbook sheet (pip install openpyxl).
+Requires openpyxl (shared/xlsx_sheet.py).
 
 Not Stata? The concept is identical for any fixed-width string storage; port the
 "bytes after the terminator" check to your format. For pre-117 .dta, first re-save
@@ -55,25 +56,10 @@ def parse_dta(raw):
     nobs = (off[10] - data0) // rec if rec else 0   # off[10] = <strls> start
     return names, widths, is_str, data0, rec, nobs
 
-def main():
-    # usage: scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]
-    # Appends a `string_tails` sheet to the shared audit workbook (created if absent)
-    # so the reviewer opens ONE file; the full per-cell dump stays a side CSV.
-    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not pos:
-        sys.exit("usage: scan_string_tails.py PATH.dta [OUT_DIR] [--xlsx=WORKBOOK.xlsx]")
-    path = pos[0]
-    outdir = pos[1] if len(pos) > 1 else os.path.dirname(os.path.abspath(path)) or "."
-    xlsx = None
-    for a in sys.argv:
-        if a.startswith("--xlsx="):
-            xlsx = a.split("=", 1)[1]
-    if xlsx is None:
-        xlsx = f"{outdir}/audit_review.xlsx"
+def scan(path):
     raw = open(path, "rb").read()
     names, widths, is_str, data0, rec, nobs = parse_dta(raw)
     offs = [sum(widths[:i]) for i in range(len(widths))]
-
     full_rows, summary = [], []
     for vi, nm in enumerate(names):
         if not is_str[vi]:
@@ -90,41 +76,40 @@ def main():
                 continue           # cleanly zero-padded
             n_res += 1
             pats[tail] += 1
-            value = c[:z].decode("latin1")
             asc = "".join(chr(x) if 32 <= x < 127 else "." for x in tail)
-            full_rows.append([nm, i+1, value, z, asc, tail.hex(" ")])
+            full_rows.append([nm, i+1, c[:z].decode("latin1"), z, asc, tail.hex(" ")])
         example = ""
         if pats:
             t = pats.most_common(1)[0][0]
             example = "".join(chr(x) if 32 <= x < 127 else "." for x in t)
-        summary.append([nm, f"str{w}", nobs, n_res,
-                        round(100*n_res/nobs, 2) if nobs else 0, len(pats), example])
+        summary.append([nm, f"str{w}", nobs, n_res, round(100*n_res/nobs, 2) if nobs else 0, len(pats), example])
+    return summary, full_rows
 
-    # full per-cell evidence stays a side CSV (can be large); the review SUMMARY
-    # goes into the shared audit workbook as a `string_tails` sheet.
-    with open(f"{outdir}/string_tails_full.csv", "w", newline="") as f:
-        wtr = csv.writer(f); wtr.writerow(["variable","obs","value","terminator_pos","tail_ascii","tail_hex"])
-        wtr.writerows(full_rows)
-
-    from openpyxl import Workbook, load_workbook
-    if os.path.exists(xlsx):
-        wb = load_workbook(xlsx)
-    else:
-        wb = Workbook(); wb.remove(wb.active)      # start clean; sheet added below
-    if "string_tails" in wb.sheetnames:
-        wb.remove(wb["string_tails"])
-    ws = wb.create_sheet("string_tails")
-    ws.append(["variable","type","n_cells","cells_with_residue","pct_residue",
-               "distinct_patterns","example_residue"])
-    for r in summary:
-        ws.append(r)
-    wb.save(xlsx)
-
-    total = sum(r[3] for r in summary)
-    print(f"scanned {sum(is_str)} string variable(s) x {nobs} obs in {os.path.basename(path)}")
-    print(f"wrote string_tails_full.csv ({len(full_rows)} rows) and 'string_tails' sheet -> {xlsx}")
+def main():
+    if len(sys.argv) < 3:
+        sys.exit("usage: scan_string_tails.py WORKBOOK.xlsx DATASETS.txt [ROOT]")
+    xlsx, listfile = sys.argv[1], sys.argv[2]
+    root = sys.argv[3] if len(sys.argv) > 3 else ""
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path[:0] = [here, os.path.join(here, "..", "..", "..", "shared")]   # project copy, then plugin
+    from xlsx_sheet import write_sheet
+    rows, evidence = [], []
+    for rel in [l.strip() for l in open(listfile) if l.strip()]:
+        path = rel if os.path.isabs(rel) else os.path.join(root, rel)
+        summary, full = scan(path)
+        rows += [[rel] + r for r in summary]
+        evidence += [[rel] + r for r in full]
+    write_sheet(xlsx, "string_tails", ["dataset", "variable", "type", "n_cells", "cells_with_residue",
+                "pct_residue", "distinct_patterns", "example_residue"], rows)
+    total = sum(r[4] for r in rows)
+    print(f"scanned {len(rows)} string variable(s) -> {xlsx} [string_tails]")
     if total:
-        print(f"FLAG: {total} cell(s) carry hidden residual bytes -> strip-pii clean-overwrite required")
+        ev = os.path.join(os.path.dirname(os.path.abspath(xlsx)), "string_tails_evidence.csv")
+        with open(ev, "w", newline="") as f:
+            wtr = csv.writer(f)
+            wtr.writerow(["dataset", "variable", "obs", "value", "terminator_pos", "tail_ascii", "tail_hex"])
+            wtr.writerows(evidence)
+        print(f"FLAG: {total} cell(s) carry hidden residual bytes ({ev}) -> strip-pii clean overwrite required")
         sys.exit(1)
     print("OK: no string-tail residue found")
 

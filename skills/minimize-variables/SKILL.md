@@ -14,6 +14,10 @@ description: >-
 
 # Minimize variables to what the package uses
 
+Conventions (every step a script in the project's `code/`, paths from one config, one
+workbook, loud failure): `shared/conventions.md`. Keys come from the user's ID inventory
+(`shared/id-inventory.md`).
+
 Shipping only the used columns removes exposure (a raw extract can carry
 hundreds of columns the results never touch) and shrinks the package. The risk is dropping something used
 indirectly, so build the keep-list from the code and **prove it by re-running**.
@@ -23,7 +27,7 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
 1. **Only the do-files the master reaches count.** A folder can hold dead
    scripts and calls commented out of the master (steps that cannot run on
    public data, steps from other languages or old code).
-   `scripts/reachable_dofiles.py <release> <master.do …> > dofiles.txt` follows every
+   `shared/reachable_dofiles.py <release> <master.do …> > dofiles.txt` follows every
    `do`/`include`/`run` line from the master, comments stripped, `$root`/macro paths
    resolved, and writes the reachable list (unreachable ones on stderr: save them for
    the report). List the study datasets the same way, one path per line, relative to
@@ -49,7 +53,11 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
      existing variable (`gen` fails if it exists), so ``gen s`x' = …`` protects no `s*`
      variable of the data — nor does the same macro-built name collecting those new
      variables elsewhere in that file (``local L `L' s`x'``). Right-hand sides and
-     literal names/wildcards on other lines still count.
+     literal names/wildcards on other lines still count;
+   - **two constructs prove nothing and are ignored**: a wildcard with no letter in its
+     literal part (`**12`), and `rename * *_suffix`, which renames whatever happens to be
+     in memory at that line. Exact and grouped renames (`rename a b`,
+     `rename (a b) (c d)`) carry the new name's use back to the old one.
    The `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
    `referenced_in` (dofile:line, up to 20), `calc_context`/`calc_via` (computed with,
    directly, through a pattern, or under the name it acquires through `rename A* B*`),
@@ -70,7 +78,7 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    with a project script that edits the lines naming them and lists every change), and
    writes the manifest as the `dropped` tab of the same workbook. Snapshot the outputs
    of the run copy *before* the drop, run the package's master end to end after it, and
-   compare every output file (`compare_before_after.py`): 0 errors and all files
+   compare every output file (`shared/compare_before_after.py`): 0 errors and all files
    identical is the proof. When the run fails it names what the static read missed;
    put that variable back (or fix the rule) and re-run. Drop from the **release copy
    only**.

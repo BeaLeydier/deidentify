@@ -14,6 +14,9 @@ description: >-
 
 # Strip confirmed PII (clean overwrite)
 
+Conventions (every step a script in the project's `code/`, work on the release copy only,
+one record of every change): `shared/conventions.md`.
+
 Takes the confirmed PII list (from `audit-pii`) and removes it. The one subtlety
 that makes this non-trivial: a fixed-width string keeps the bytes after its `\0`
 terminator, so a plain `replace name = "REDACTED"` on a wider field leaves the
