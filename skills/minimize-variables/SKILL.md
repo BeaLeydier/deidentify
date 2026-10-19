@@ -57,7 +57,9 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    - **two constructs prove nothing and are ignored**: a wildcard with no letter in its
      literal part (`**12`), and `rename * *_suffix`, which renames whatever happens to be
      in memory at that line. Exact and grouped renames (`rename a b`,
-     `rename (a b) (c d)`) carry the new name's use back to the old one.
+     `rename (a b) (c d)`) carry the new name's use back to the old one;
+   - every member of an `a-b` **range** counts as used: a range follows the dataset's
+     variable order, so dropping a member changes what it covers.
    The `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
    `referenced_in` (dofile:line, up to 20), `calc_context`/`calc_via` (computed with,
    directly, through a pattern, or under the name it acquires through `rename A* B*`),
