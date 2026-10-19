@@ -12,7 +12,7 @@ Every step of a project is meant to live as a reviewable script in the project's
 `code/` folder, with all paths relative to the project and packages installed inside it,
 so the whole audit re-runs from the project folder alone (`shared/conventions.md`).
 Requirements: Stata 16+ for the `.ado`/`.do` tools; Python 3 with **openpyxl** (plus
-**Pillow + numpy** and poppler's `pdftoppm` for the figure comparison).
+poppler's `pdftoppm` for the pixel comparison of figures).
 
 `shared/` holds what several skills use: the conventions, the ID-inventory spec, and
 small standalone tools (`reachable_dofiles.py`, `compare_before_after.py`,

@@ -7,14 +7,14 @@ Usage: compare_figures.py REF_DIR NEW_DIR WORKBOOK.xlsx WORK_DIR
 Two levels, per file name present in both folders:
   1. content streams: the PDF's printable text minus CreationDate/ModDate/Producer/Creator lines;
      identical streams = identical drawing commands.
-  2. pixels: each PDF rendered at 150 dpi (needs `pdftoppm` from poppler, and Pillow + numpy) and
-     subtracted; share of pixels that differ at all.
+  2. pixels: each PDF rendered at 150 dpi (needs `pdftoppm` from poppler; read as PPM, so no
+     other library) and compared; share of pixels that differ at all.
 Pixel/byte comparison is only meaningful when BOTH sets were produced on the SAME machine: across
 machines, font family and page scaling dominate (a 4-7% pixel difference from fonts alone was seen
 between Windows- and macOS-built Stata figures). If the reference was built elsewhere, re-run the
 reference package's figure code locally first, then compare.
 """
-import os, subprocess, sys
+import os, subprocess, sys, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "..", "..", "shared")]
 from xlsx_sheet import write_sheet
@@ -31,17 +31,21 @@ for fn in sorted(os.listdir(ref)):
         continue
     a, b = os.path.join(ref, fn), os.path.join(new, fn)
     same = content_stream(a) == content_stream(b)
-    pct = ""
-    try:
-        from PIL import Image; import numpy as np
-        pa, pb = os.path.join(scratch, "ref_" + fn[:-4]), os.path.join(scratch, "new_" + fn[:-4])
-        subprocess.run(["pdftoppm", "-r", "150", "-png", "-singlefile", a, pa], check=True)
-        subprocess.run(["pdftoppm", "-r", "150", "-png", "-singlefile", b, pb], check=True)
-        A = np.asarray(Image.open(pa + ".png").convert("L"), dtype=np.int16)
-        B = np.asarray(Image.open(pb + ".png").convert("L"), dtype=np.int16)
-        pct = f"{100 * float((abs(A - B) > 0).mean()):.4f}" if A.shape == B.shape else "size differs"
-    except Exception as e:                       # no poppler/Pillow: content-stream check only
-        pct = f"n/a ({type(e).__name__})"
+    pct = "n/a (no pdftoppm)"
+    if shutil.which("pdftoppm"):
+        imgs = []
+        for tag, p in (("ref", a), ("new", b)):
+            stem = os.path.join(scratch, f"{tag}_{fn[:-4]}")
+            subprocess.run(["pdftoppm", "-r", "150", "-singlefile", p, stem], capture_output=True)
+            raw = open(stem + ".ppm", "rb").read().split(maxsplit=4)     # P6 width height maxval pixels
+            imgs.append((int(raw[1]), int(raw[2]), raw[4]))
+            os.remove(stem + ".ppm")
+        (wa, ha, pa), (wb, hb, pb) = imgs
+        if (wa, ha) != (wb, hb):
+            pct = "size differs"
+        else:
+            nd = sum(1 for k in range(0, len(pa), 3) if pa[k:k + 3] != pb[k:k + 3])
+            pct = f"{100 * nd / (wa * ha):.4f}"
     rows.append([fn, "identical" if same else "differs", pct])
     print(f"{fn}: content {'identical' if same else 'DIFFERS'}, pixels differing {pct}%")
 write_sheet(out, "figures", ["figure", "pdf_content_stream", "pct_pixels_differing"], rows)
