@@ -4,7 +4,8 @@
 *   exact           the name appears as a token
 *   wildcard <pat>  the name matches a glob pattern in the code (prefix r1_*, suffix *_va,
 *                   infix x*_q1, a reshape stub, or a macro-built name it could not fill in)
-*   range a-b       the name lies inside an a-b variable range
+*   range a-b       the name lies inside an a-b variable range (always counted as used:
+*                   dropping a member would change what the range covers)
 *   always-keep     matches alwayskeep()
 * Matching is CASE-SENSITIVE, like Stata's variable names.
 *
@@ -175,6 +176,10 @@ program define find_used_variables
             if `inrng' {
                 if "`h'"=="drop?" local h = "range a-b"
                 local u = 1
+                * a range is resolved on the dataset's variable ORDER: dropping a member changes
+                * what the range covers, so every member counts as used (conservative)
+                local calc = 1
+                if "`via'"=="" local via "range"
                 if `: list v in ENDPTS' local sib "endpoint"
                 else if "`sib'"=="" local sib "range-member"
             }
