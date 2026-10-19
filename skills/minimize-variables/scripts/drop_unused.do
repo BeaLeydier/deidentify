@@ -55,6 +55,10 @@ forvalues i = 1/`np' {
 }
 frame __W {
     gen byte is_string = substr(type, 1, 3)=="str"
+    * Excel refuses invalid UTF-8 and control characters (old Latin-1 labels): clean them
+    foreach s in label referenced_in how {
+        replace `s' = ustrregexra(ustrfix(`s', "?"), "[\x00-\x1F]", " ")
+    }
     order dataset variable class type is_string label how referenced_in
     export excel using "$VARUSAGE", sheet("dropped") sheetreplace firstrow(variables)
     quietly count

@@ -14,6 +14,8 @@
 *     (several definitions of one name in a file are pooled);
 *   - otherwise (values from the data: r(), levelsof, `: word', varlists, other files ...)
 *     turned into a wildcard (s`i'_q`j' -> s*_q*).
+* Two constructs prove nothing and are ignored: a wildcard without a letter in its literal
+* part ("**12"), and `rename * *_suffix`, which renames whatever happens to be in memory.
 * Names the code CREATES: the target of gen/egen is never an existing variable (gen fails
 * if it exists), so it matches nothing in the data. A macro-built target (gen s`x' = ...)
 * is treated as created everywhere the same macro-built name appears in that do-file (e.g. a
@@ -74,7 +76,9 @@ program define find_used_variables
         gen byte iswild = strpos(tok,"*")>0
         gen str244 lit  = ustrregexra(tok, "[^A-Za-z0-9]", "")
         gen byte simpleprefix = ustrregexm(tok, "^[A-Za-z0-9_]+\*$")
-        gen byte usable = tok!="" & (!iswild | strlen(lit)>=2 | simpleprefix)
+        * a wildcard needs a literal stem with a letter (x*, *_va, s*_q*); "**12" would match
+        * almost anything and proves nothing
+        gen byte usable = tok!="" & (!iswild | ((strlen(lit)>=2 | simpleprefix) & ustrregexm(lit, "[A-Za-z]")))
         * a reference counts as a calculation unless the line's command is structural
         gen byte iscalc = usable & cmd!=""
         foreach c of local STRUCT {
@@ -599,9 +603,13 @@ void _fuv_tokens(string scalar listfile, string scalar root)
                     }
                     else {
                         ws = tokens(ustrregexra(s, "[^A-Za-z0-9_*]", " "))
+                        // rename * *_suffix renames whatever is in memory at that line, which a
+                        // static read cannot know: it maps nothing (the re-run is the check)
                         if (cols(ws) >= 3) {
-                            allro = allro \ ws[2]
-                            allrn = allrn \ ws[3]
+                            if (ws[2] != "*") {
+                                allro = allro \ ws[2]
+                                allrn = allrn \ ws[3]
+                            }
                         }
                     }
                 }
