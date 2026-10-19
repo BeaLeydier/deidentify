@@ -13,7 +13,9 @@
 * Writes the manifest as sheet `dropped` of $VARUSAGE (one row per dropped variable).
 import excel using "$VARUSAGE", sheet("variables") firstrow clear allstring
 gen byte todrop = inlist(class, "drop?", "wildcard-only-droppable")
-if "$DROP_STRUCTURAL"=="1" replace todrop = 1 if class=="structural-only"
+* a pattern anchor (the last member of a wildcard family, kept so `keep x*` still matches) stays:
+* removing the pattern from the code would also change what it does to variables the code creates
+if "$DROP_STRUCTURAL"=="1" replace todrop = 1 if class=="structural-only" & !strpos(how, "pattern anchor")
 keep if todrop
 keep dataset variable class how referenced_in
 sort dataset variable

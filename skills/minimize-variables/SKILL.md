@@ -63,11 +63,12 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    directly, through a pattern, or under the name it acquires through `rename A* B*`),
    and `class`:
    - `used-calc` — computed with somewhere (gen, egen, regressions, collapse, reshape,
-     merge/sort keys, …);
+     merge/sort keys, …), or named in an `if` condition of any command (`keep if age >= 6`);
    - `structural-only` — named only in structural commands (keep, drop, order, rename,
      keepusing, format, label, …); includes one *pattern anchor* per wildcard family
      whose every member is otherwise droppable, so a `keep x*` cannot become empty.
-     Dropping one means editing those lines too;
+     Dropping one means editing those lines too; pattern anchors are not dropped, as
+     removing the pattern would change what the command does to variables the code creates;
    - `wildcard-only-droppable` — reached only through wildcards/ranges that also match
      other variables, never in a calculation, also after renames;
    - `always-keep`; `drop?` — referenced nowhere.

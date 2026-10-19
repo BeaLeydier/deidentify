@@ -25,8 +25,9 @@
 * For the reviewer, in which command CONTEXT each reference occurs:
 *   calc_context    the variable (or the name it acquires through a rename, exact or A* B*)
 *                   is referenced by a command that computes with it (gen, replace, egen,
-*                   regressions, summarize, collapse, ...), as opposed to a purely structural
-*                   command (keep, drop, order, rename, merge/keepusing, sort, ...)
+*                   regressions, summarize, collapse, ...) or in an if-condition of any
+*                   command (keep if age >= 6), as opposed to a purely structural use
+*                   (keep, drop, order, rename, merge/keepusing, sort, ...)
 *   n_pattern_siblings  for a wildcard/range match: how many OTHER variables of the same
 *                   dataset the same pattern also matches (0 = dropping it would break the
 *                   command); for a range: "endpoint" if it is one of the two endpoints
@@ -623,6 +624,21 @@ void _fuv_tokens(string scalar listfile, string scalar root)
                 if (rows(t) > 0) {
                     m = ustrregexm(t, "^[A-Za-z_][A-Za-z0-9_]*-[A-Za-z_][A-Za-z0-9_]*" + char(36))
                     if (sum(m) > 0) allr = allr \ select(t, m)
+                }
+                // ---- an if-condition computes with its variables, whatever the command
+                //      (keep if age >= 6): its tokens are recorded under the command "if" ----
+                q = 0
+                if (ustrregexm(s, "(^|[ ,])if[ (]")) {
+                    q = strpos(ustrregexra(s, "(^|[ ,])if[ (]", char(1)), char(1))
+                }
+                if (q > 0) {
+                    r = ustrregexra(substr(s, q, .), "[^A-Za-z0-9_*]", " ")
+                    r = ustrregexra(r, "^ *if ", " ")
+                    s = substr(s, 1, q-1)
+                    t = tokens(r)'
+                    if (rows(t) > 0) {
+                        allt = allt \ t; allw = allw \ J(rows(t),1, wh); allc = allc \ J(rows(t),1,"if")
+                    }
                 }
                 // ---- tokens (and the literal pieces of wildcard tokens: x*100 is multiplication) ----
                 s = ustrregexra(s, "[^A-Za-z0-9_*]", " ")
