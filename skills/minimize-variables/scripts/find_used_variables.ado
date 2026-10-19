@@ -11,7 +11,8 @@
 *
 * Macro-built names (s`i'_q`j'):
 *   - filled in with the macro's values when the do-file spells them out: forvalues i = 1/12,
-*     foreach i in a b c, foreach i of numlist 1/5, foreach i of local L, local L a b c
+*     foreach i in a b c, foreach i of numlist 1/5, foreach i of local L, local L a b c,
+*     local x = 1
 *     (several definitions of one name in a file are pooled);
 *   - otherwise (values from the data: r(), levelsof, `: word', varlists, other files ...)
 *     turned into a wildcard (s`i'_q`j' -> s*_q*).
@@ -429,6 +430,10 @@ void _fuv_defs(string scalar s, transmorphic MV, transmorphic BAD)
     if (ustrregexm(st, "^(local|loc)[ ]+(\+\+|--)?([A-Za-z_][A-Za-z0-9_]*)(.*)$")) {
         nm = ustrregexs(3)
         rest = ustrregexs(4)
+        if (ustrregexs(2) == "" & ustrregexm(rest, "^[ ]*=[ ]*(-?[0-9]+([.][0-9]+)?)[ ]*$")) {
+            _fuv_addvals(MV, nm, ustrregexs(1))          // local x = 1: a literal number
+            return
+        }
         if (ustrregexs(2) != "" | ustrregexm(rest, "^[ ]*[=:]")) {
             asarray(BAD, nm, 1)
             return
