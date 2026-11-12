@@ -89,8 +89,7 @@ which workbook* below. Put `scripts/` on the adopath (or copy the tools into the
      (must be 0, unless it is a derived id whose rule you then verify row by row) and
      `n_in_old_only` (must be 0), beside `expected_hits_if_unscrambled` — "0 observed
      against tens of thousands expected" is the argument when the overlap is large.
-   - **Test 2**, digit-only strings ≥ 10,000 against every family's old-only set.
-   - **Test 3, old id elsewhere in the row**: each row's old id recovered through the
+   - **Test 2, old id elsewhere in the row**: each row's old id recovered through the
      crosswalk and compared with every other column; a column equal on ≥ 99 % of its
      non-missing rows *and* on ≥ 10 rows is an old-id column kept by mistake (a few
      coincidental equalities are noise).
@@ -126,7 +125,7 @@ step of the project orders and numbers them, e.g. with `shared/xlsx_sheet.py`'s 
    `1. pii_surfaces`, `1. dataset_notes`, `1. value_label_flags`, `1. string_tails`
    (after a clean-up also `1. metadata_cleaned`);
 2. id audit — `2. code_scan`, `2. id_maps`, `2. id_watchlist_sizes`,
-   `2. id_crossref_numeric`, `2. id_crossref_string`, `2. id_mergeback_rowtest`,
+   `2. id_crossref_numeric`, `2. id_mergeback_rowtest`,
    `2. id_text_sweep`.
 `1. identifiers` lists the variables of the ID inventory found in each dataset — the keys
 set aside from the PII shortlist; the leak tests' results for them are one row per

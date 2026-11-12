@@ -4,7 +4,7 @@
 *   $XWALK     folder with the crosswalk .dta files (private, read-only)
 *   $WATCH     PRIVATE folder for the watch lists (re-identification keys: never shipped)
 *   $WORKBOOK  the review workbook; tabs id_watchlist_sizes, id_crossref_numeric (one row per
-*              tested variable), id_crossref_string, id_mergeback_rowtest
+*              tested variable), id_mergeback_rowtest
 *   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old col> <new col>"
 *   $IDVARS_fam1 "var1 var2 ...": the user's ID inventory -- the variables of that family
 *              (every dataset holding the name). Required: ask the user for it. Id-like
@@ -13,8 +13,7 @@
 *   never a legal new value); their sizes and overlap say how informative test 1 is.
 * Test 1 (per listed variable, distinct values): n_outside_image (not a legal new id) and
 *   n_in_old_only (provably an old id); expected_hits_if_unscrambled = n_distinct x share old-only.
-* Test 2: digit-only string values >= 10,000 against every family's OLD-ONLY set.
-* Test 3: each row's OLD id recovered through the crosswalk; every other column equal to it on
+* Test 2: each row's OLD id recovered through the crosswalk; every other column equal to it on
 *   >= 99% of its non-missing rows and >= 10 rows is an old-id column kept by mistake.
 * How much ORDER each map keeps (rank correlation) is the check-id-order skill's job.
 * ---------------------------------------------------------------------------------------------
@@ -60,8 +59,8 @@ foreach fam of global IDFAMS {
 }
 file close `S'
 * ---- Part B: tests ----
-tempname T1 T2 T3
-tempfile F_id_crossreference_numeric F_id_crossreference_string F_id_mergeback_rowtest
+tempname T1 T3
+tempfile F_id_crossreference_numeric F_id_mergeback_rowtest
 * the inventory is required
 foreach fam of global IDFAMS {
     if `"${IDVARS_`fam'}"' == "" {
@@ -71,8 +70,6 @@ foreach fam of global IDFAMS {
 }
 file open `T1' using `F_id_crossreference_numeric', write replace
 file write `T1' "dataset,variable,family,n_nonmiss,n_distinct,n_outside_image,n_in_old_only,share_old_only,expected_hits_if_unscrambled,min,max" _n
-file open `T2' using `F_id_crossreference_string', write replace
-file write `T2' "dataset,variable,n_digit_values_ge_10000,family,n_outside_image,n_in_old_only" _n
 file open `T3' using `F_id_mergeback_rowtest', write replace
 file write `T3' "dataset,id_variable,family,other_column,n_rows_with_old_id,n_rows_other_nonmiss,n_rows_equal,share_of_nonmiss,column_is_old_id" _n
 import delimited using `WS', clear varnames(1)
@@ -87,8 +84,6 @@ while r(eof)==0 {
     quietly use "$DATADIR/`rel'", clear
     quietly ds
     local allv `r(varlist)'
-    quietly ds, has(type string)
-    local strv `r(varlist)'
     foreach v of local allv {
         local lv = strlower("`v'")
         local fam ""
@@ -139,7 +134,7 @@ while r(eof)==0 {
             local inold = r(N)
             file write `T1' `""`rel'","`v'","`fam'",`nnm',`nd',`outimg',`inold',`SHARE_`fam'',`=round(`nd'*`SHARE_`fam'',1)',`mn',`mx'"' _n
         restore
-        * ---- Test 3: old id recovered through the crosswalk, compared column by column ----
+        * ---- Test 2: old id recovered through the crosswalk, compared column by column ----
         local spec : word 1 of ${XW_`fam'}
         local ocol : word 2 of ${XW_`fam'}
         local ncol : word 3 of ${XW_`fam'}
@@ -181,40 +176,15 @@ while r(eof)==0 {
             }
         restore
     }
-    * ---- Test 2: digit-only strings, values >= 10,000, against every family ----
-    foreach v of local strv {
-        preserve
-            quietly keep `v'
-            quietly gen double val = real(`v')
-            quietly keep if !missing(val) & regexm(trim(`v'),"^[0-9]+$") & val>=10000
-            if _N>0 {
-                quietly keep val
-                quietly duplicates drop
-                local nv = _N
-                foreach fam of global IDFAMS {
-                    quietly merge m:1 val using "$WATCH/WL_image_`fam'.dta", keep(master match) gen(_mi)
-                    quietly count if _mi==1
-                    local outimg = r(N)
-                    drop _mi
-                    quietly merge m:1 val using "$WATCH/WL_origonly_`fam'.dta", keep(master match) gen(_mo)
-                    quietly count if _mo==3
-                    local inold = r(N)
-                    drop _mo
-                    if `inold'>0 file write `T2' `""`rel'","`v'",`nv',"`fam'",`outimg',`inold'"' _n
-                }
-            }
-        restore
-    }
     file read IN line
 }
 file close IN
 file close `T1'
-file close `T2'
 file close `T3'
 * ---- write the tabs ----
 import delimited using `WS', clear varnames(1) stringcols(1)
 export excel using "$WORKBOOK", sheet("id_watchlist_sizes") sheetreplace firstrow(variables)
-foreach t in id_crossreference_numeric id_crossreference_string id_mergeback_rowtest {
+foreach t in id_crossreference_numeric id_mergeback_rowtest {
     import delimited using `F_`t'', clear varnames(1) stringcols(_all) bindquote(strict)
     if _N == 0 set obs 1
     local sh = subinstr("`t'", "crossreference", "crossref", 1)

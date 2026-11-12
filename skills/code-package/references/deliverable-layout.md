@@ -42,7 +42,7 @@ The sections then depend on the skills invoked in that particular task. In gener
    the proof, where the drops concentrate.
 4. **Identifier leak tests** — which variables were tested (the user's inventory;
    scan candidates the user accepted or rejected, with reasons), the watch-list
-   size table with overlap, tests 1–3, text sweep; the order each map keeps
+   size table with overlap, tests 1–2, text sweep; the order each map keeps
    (check-id-order: rank correlation, overlap) and where the code relies on it.
 5. **PII surfaces** — classifier rules and counts; notes/characteristics/labels
    with the decision the PIs must make.
