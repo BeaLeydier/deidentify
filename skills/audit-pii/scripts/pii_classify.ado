@@ -1,6 +1,7 @@
 *! pii_classify -- classify every variable of the dataset in memory for direct-PII risk.
-*! One row per variable of every listed dataset, into three tabs of the review workbook:
-*! likely_pii (with empty is_pii / action columns), other_variables, identifiers. Typing
+*! One row per variable of every listed dataset, into two tabs of the review workbook:
+*! likely_pii (with empty is_pii / action columns) and other_variables; the ID inventory's
+*! variables are set aside (counted, not listed: id_inventory.xlsx lists them). Typing
 *! rules (numerics, numbers in disguise, time slots, count/amount labels -> other), so the
 *! output is a short shortlist (category likely_pii) plus everything else (other_variables),
 *! identifiers kept apart.
@@ -10,7 +11,7 @@
 *
 *  category  : identifier | likely_pii | other
 *  RULES (applied in this order)
-*   1. identifier key (name matches idkeys(), i.e. the user's ID inventory) -> identifier (own tab)
+*   1. identifier key (name matches idkeys(), i.e. the ID inventory)  -> identifier (set aside)
 *   2. direct-id term in name or label                  -> likely_pii   (name, dob/birth, address,
 *      phone/contact/mobile, national id / cnic, gps/latitude/longitude/coord, email, caste)
 *      or a lat/lon PAIR of adjacent variables          -> likely_pii
@@ -67,11 +68,6 @@ program define pii_classify
     drop _k category is_identifier_key
     if _N == 0 set obs 1
     export excel using "`workbook'", sheet("other_variables") sheetreplace firstrow(variables)
-    use `all', clear
-    keep if category=="identifier"
-    keep dataset variable type label n_nonmiss n_distinct reason
-    if _N == 0 set obs 1
-    export excel using "`workbook'", sheet("identifiers") sheetreplace firstrow(variables)
     use `all', clear
     contract category
     list, clean noobs

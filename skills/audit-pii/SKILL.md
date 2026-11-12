@@ -25,11 +25,10 @@ are *indicative* — a person decides, in the `is_pii` / `action` columns.
 Conventions (every step a script in the project's `code/`, paths from one config, tabs
 written straight into the workbook, loud failure): `shared/conventions.md`.
 
-**Start from the user's ID inventory** (`shared/id-inventory.md`): which variables are
-identifiers, of which entity. It feeds `idkeys()`, `idvars()` and `$IDVARS_<family>`
-below. Ask for it before scanning. What the scans find on their own (id-like names,
-row-unique variables, family words) is reported as *candidates* to accept or reject; it
-never reclassifies a listed variable.
+**Start from the ID inventory** (`id_inventory.xlsx`, built once at set-up by the
+**map-ids** skill): which variables are identifiers, of which entity. It feeds `idkeys()`
+and `$IDVARS_<family>` below. Without an inventory, run map-ids first; the audit does not
+look for id candidates itself.
 
 **Study data only.** Example datasets shipped inside third-party `ado/` folders
 (`auto.dta`, `florentine.dta`, …) are not study data: leave them out of the dataset list
@@ -44,10 +43,11 @@ which workbook* below. Put `scripts/` on the adopath (or copy the tools into the
 
 1. **Classify every variable** —
    `pii_classify, datasets(datasets.txt) root(<pkg>) workbook(<wb>) idkeys("<inventory>")`
-   writes tabs `likely_pii` (direct terms first, empty `is_pii`/`action`),
-   `other_variables` and `identifiers`. Rules (chosen so the shortlist stays short — a
+   writes tabs `likely_pii` (direct terms first, empty `is_pii`/`action`) and
+   `other_variables`. Rules (chosen so the shortlist stays short — a
    bare keyword match flags far too much):
-   - inventory identifiers → `identifier`, their own tab, never PII candidates;
+   - inventory identifiers → set aside, never PII candidates (counted in the summary; the
+     inventory lists them);
    - a direct-identifier term in name or label (name, dob/birth, address,
      phone/contact/mobile, national id/cnic, gps/latitude/longitude/coord, email, caste),
      an adjacent lat/lon **pair**, or value labels that read like free text / mention a
@@ -61,12 +61,12 @@ which workbook* below. Put `scripts/` on the adopath (or copy the tools into the
    Never use a detector that uploads data to a third party.
 
 2. **Summarise the other surfaces** —
-   `pii_surfaces, datasets(datasets.txt) root(<pkg>) workbook(<wb>) dofiles(dofiles.txt)
-   idvars("<inventory>")` writes tabs `pii_surfaces` (per dataset: notes and their size,
+   `pii_surfaces, datasets(datasets.txt) root(<pkg>) workbook(<wb>) dofiles(dofiles.txt)`
+   writes tabs `pii_surfaces` (per dataset: notes and their size,
    hand-written vs machine-generated characteristics — reshape/xi/tsset leave `ReS_*`,
    `__xi__*`, `_TS*` —, value-label sets and flagged entries, variable labels with a
    direct term, labels or notes holding a file path), `dataset_notes` (full text),
-   `value_label_flags` and `id_candidates`, and reports whether any do-file **reads**
+   and `value_label_flags`, and reports whether any do-file **reads**
    notes or characteristics (if none does, they can be removed without touching the
    code). Notes are free text: report their amount and let the PIs decide. The checklist
    of surfaces is `references/pii-surfaces.md`.
@@ -121,15 +121,13 @@ cleaned data, confirming nothing that was to go remains).
 **Tab order** (the README tab lists them in this order; the tools write plain names, the last
 step of the project orders and numbers them, e.g. with `shared/xlsx_sheet.py`'s `arrange`):
 `README`, `summary`, then
-1. PII audit — `1. likely_pii`, `1. other_variables`, `1. identifiers`, `1. id_candidates`,
-   `1. pii_surfaces`, `1. dataset_notes`, `1. value_label_flags`, `1. string_tails`
+1. PII audit — `1. likely_pii`, `1. other_variables`, `1. pii_surfaces`, `1. dataset_notes`, `1. value_label_flags`, `1. string_tails`
    (after a clean-up also `1. metadata_cleaned`);
 2. id audit — `2. code_scan`, `2. id_maps`, `2. id_watchlist_sizes`,
    `2. id_crossref_numeric`, `2. id_mergeback_rowtest`,
    `2. id_text_sweep`.
-`1. identifiers` lists the variables of the ID inventory found in each dataset — the keys
-set aside from the PII shortlist; the leak tests' results for them are one row per
-variable in `2. id_crossref_numeric`.
+The ids themselves are not listed here: `id_inventory.xlsx` holds them, and the leak tests'
+results are one row per id variable in `2. id_crossref_numeric`.
 
 ## Notes
 

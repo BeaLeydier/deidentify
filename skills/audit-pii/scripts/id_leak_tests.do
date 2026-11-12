@@ -8,7 +8,7 @@
 *   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old col> <new col>"
 *   $IDVARS_fam1 "var1 var2 ...": the user's ID inventory -- the variables of that family
 *              (every dataset holding the name). Required: ask the user for it. Id-like
-*              variables NOT listed are reported by pii_surfaces (tab id_candidates).
+*              variables NOT listed are the map-ids skill's job (id_inventory.xlsx, tab candidates).
 * Watch lists (from the crosswalks): ALL OLD, ALL NEW (the image) and OLD-ONLY (old ids that are
 *   never a legal new value); their sizes and overlap say how informative test 1 is.
 * Test 1 (per listed variable, distinct values): n_outside_image (not a legal new id) and

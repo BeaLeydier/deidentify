@@ -22,8 +22,8 @@ in two modes. Its tabs (`code_scan`, `id_maps`, `relabel_test`) go in the audit 
 not scrambled yet; the code scan and the id maps for a scrambled one.
 
 Conventions (reproducible scripts in the project's `code/`, one workbook, loud failure):
-`shared/conventions.md`. The ids to check come from the user's ID inventory
-(`shared/id-inventory.md`): ask for it first; a scan never decides what an id is.
+`shared/conventions.md`. The ids to check come from the ID inventory (`id_inventory.xlsx`, built once at set-up by
+the **map-ids** skill; without one, run map-ids first): a scan never decides what an id is.
 
 ## Mode 1 — before scrambling: which method?
 

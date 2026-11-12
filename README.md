@@ -22,7 +22,8 @@ small standalone tools (`reachable_dofiles.py`, `compare_before_after.py`,
 
 | Skill | Invoke as | Purpose |
 |---|---|---|
-| Orchestrator | `/deidentify:code-package` | Maps the package and sequences the six skills below, then ships clean + writes the two readmes. |
+| Orchestrator | `/deidentify:code-package` | Asks what the job is (publish or audit; PII only or ids too; scramble or audit a scramble; what to compare with; drop unused variables), then runs only the skills needed, in order, and writes the records. |
+| Map ids | `/deidentify:map-ids` | Build the ID inventory once, at set-up: the user's list or description of the ids, checked by a scan (id-like names, row-unique variables, same values in two files); without a list, the scan proposes candidates to accept or reject. Every other skill reads it. |
 | Audit PII | `/deidentify:audit-pii` | Classify every variable (identifier / likely PII / other) with `pii_classify`, summarise the other surfaces (notes, characteristics, value labels) with `pii_surfaces`, scan string-tail bytes, and, with the private crosswalks (if the user has access to them), prove no original id survives. One review workbook. Read-only. |
 | Check id order | `/deidentify:check-id-order` | Does the code use an id's value or order (static scan + random-relabel test)? How much order does an old→new map keep (rank correlation, overlap)? Before scrambling, to choose the method; after, to audit it. |
 | Strip PII | `/deidentify:strip-pii` | Drop or overwrite confirmed PII with a clean overwrite (no residual "ghost tail"). |
@@ -48,7 +49,7 @@ git clone https://github.com/BeaLeydier/deidentify ~/.claude/skills/deidentify
 Each skill is independently useful (e.g. `audit-pii` on any dataset) and
 auto-triggers on its own description. The orchestrator ties them together.
 
-Every skill starts from an **ID inventory supplied by the user** — which variables
+Every skill starts from an **ID inventory**, built once at set-up by `map-ids` from the user's own list or description — which variables
 identify which entities, in which files, with which composite/derived rules, and how
 the datasets link (`shared/id-inventory.md`). Scans of the
 data only add *candidates* to that inventory; they never override it.

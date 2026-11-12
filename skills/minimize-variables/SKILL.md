@@ -15,8 +15,8 @@ description: >-
 # Minimize variables to what the package uses
 
 Conventions (every step a script in the project's `code/`, paths from one config, one
-workbook, loud failure): `shared/conventions.md`. Keys come from the user's ID inventory
-(`shared/id-inventory.md`).
+workbook, loud failure): `shared/conventions.md`. Keys come from the ID inventory
+(`id_inventory.xlsx`, built at set-up by the **map-ids** skill).
 
 Shipping only the used columns removes exposure (a raw extract can carry
 hundreds of columns the results never touch) and shrinks the package. The risk is dropping something used

@@ -32,7 +32,8 @@ you copy and adapt per package. This skill assumes the data are for **public rel
 the map is random. An order-preserving ("monotone") map is trivially reversible by anyone
 holding the original ids (one sort and a rank merge) and is not an option here.
 
-Everything starts from the **user's ID inventory** (`shared/id-inventory.md`): which
+Everything starts from the **ID inventory** (`id_inventory.xlsx`, built once at set-up by
+the **map-ids** skill; without one, run map-ids first): which
 variables are ids, of which entity, in which files, which are parts of a composite key or
 derived by a rule, which pairs are the same kind of id from two sources, and which cutoffs
 the code applies. Ask for it before touching the data. The data can suggest additions (a
