@@ -52,8 +52,27 @@ Conventions (reproducible scripts in the project's `code/`, one workbook, loud f
      slice boundary. The cutoff survives, the order inside each band does not;
    - **ship the indicator instead of the rule**: build `treated_region` (or the numbered
      dummies) once from the original ids, ship it, and rewrite the line to use it;
-   - **explicit numbering**: dummies by value from a list, loops over the mapped values;
-   - **fix the tie-break, not the map**: an explicit sort key instead of `duplicates drop`.
+   - **explicit numbering** (class B): code that numbers entities by the *rank* of their id
+     and then names one by its number. `tab mauzaid, gen(MAU_)` makes `MAU_1 … MAU_k` in
+     ascending id order, so `MAU_84` means "the 84th smallest village id"; after a random
+     relabel it is another village. A full set of such dummies used as fixed effects is
+     harmless (the set is the same); only a *named* one is a problem. Name the entity by its
+     value instead — `gen MAU_v = (mauzaid == 15960745)`, the literal being the scrambled id,
+     recoded through the map like any hardcoded id value — and loop over values, not
+     positions: `levelsof mauzaid, local(vs)` then `foreach v of local vs`, instead of
+     `forvalues i = 1/194` paired with ids by rank. The scrambled literal reveals nothing;
+   - **fix the tie-break, not the map** (class C): `sort id` then `duplicates drop`, `[1]`,
+     `collapse (first)` keep whichever row comes first among rows tied on the key, and that
+     depends on the id order. Make the choice a rule about the data, not about row order:
+     keep the latest interview, the most complete record, the row with the larger value of a
+     substantive variable (`gsort key -survey_date`, then keep the first). Where no
+     substantive rule exists, break ties by the *scrambled* id or by a random variable drawn
+     once with a fixed seed and shipped: both are deterministic and reveal nothing about the
+     original ids. **Never** break ties by anything that encodes the original order — a
+     shipped "original row number", the original id, or a variable sorted by it: on data
+     that were sorted by id it is the original rank, and reverses the scramble as surely as
+     an order-preserving map. The original pick was arbitrary, so no honest fix reproduces
+     it: expect the affected numbers to move a little, and document it (as a correction).
    An order-preserving map is never the fix for a public release.
 
 ## Mode 2 — on a scrambled release: how reversible is it?
