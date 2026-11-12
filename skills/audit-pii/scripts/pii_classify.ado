@@ -1,14 +1,17 @@
 *! pii_classify -- classify every variable of the dataset in memory for direct-PII risk.
-*! Writes/appends one CSV row per variable. Same keyword idea as pii_scan, plus typing
+*! One row per variable of every listed dataset, into two tabs of the review workbook:
+*! likely_pii (with empty is_pii / action columns) and other_variables; the ID inventory's
+*! variables are set aside (counted, not listed: id_inventory.xlsx lists them). Typing
 *! rules (numerics, numbers in disguise, time slots, count/amount labels -> other), so the
 *! output is a short shortlist (category likely_pii) plus everything else (other_variables),
 *! identifiers kept apart.
 *
-*  syntax: pii_classify, out(<csv path>) dataset(<label>) [idkeys(<glob list>)] [append]
+*  syntax: pii_classify, datasets(<list file>) [root(<dir>)] workbook(<xlsx>) idkeys(<globs>)
+*  (list file: one dataset path per line, relative to root(); idkeys: the user's ID inventory)
 *
 *  category  : identifier | likely_pii | other
 *  RULES (applied in this order)
-*   1. identifier key (name matches idkeys(), i.e. the user's ID inventory) -> identifier (own tab)
+*   1. identifier key (name matches idkeys(), i.e. the ID inventory)  -> identifier (set aside)
 *   2. direct-id term in name or label                  -> likely_pii   (name, dob/birth, address,
 *      phone/contact/mobile, national id / cnic, gps/latitude/longitude/coord, email, caste)
 *      or a lat/lon PAIR of adjacent variables          -> likely_pii
@@ -25,6 +28,52 @@
 *  keyword_hit : pii_scan's broad keyword list matched in name/label (informational; the
 *                other_variables tab is sorted so these come first)
 program define pii_classify
+    version 16
+    syntax , DATAsets(string) WORKbook(string) [ROOT(string) IDKeys(string)]
+    if "`root'"!="" & substr("`root'", -1, 1)!="/" local root "`root'/"
+    tempfile rows
+    local first = 1
+    tempname IN
+    file open `IN' using "`datasets'", read text
+    file read `IN' line
+    while r(eof)==0 {
+        local rel = strtrim(`"`line'"')
+        if `"`rel'"' != "" {
+            local d `"`rel'"'
+            if !ustrregexm(`"`d'"', "^(/|[A-Za-z]:)") local d `"`root'`d'"'
+            quietly use `"`d'"', clear
+            if `first' _pii_classify_one, out("`rows'") dataset("`rel'") idkeys("`idkeys'")
+            else       _pii_classify_one, out("`rows'") dataset("`rel'") idkeys("`idkeys'") append
+            local first = 0
+        }
+        file read `IN' line
+    }
+    file close `IN'
+    import delimited using "`rows'", varnames(1) clear stringcols(_all) bindquote(strict) maxquotedrows(unlimited)
+    tempfile all
+    quietly save `all'
+    * likely_pii: direct terms first, then lat/lon, value labels, free text; reviewer columns
+    keep if category=="likely_pii"
+    gen byte _o = cond(direct_id_term!="", 1, cond(latlon_pair=="1", 2, cond(vlabel_flag!="", 3, 4)))
+    sort _o dataset variable
+    drop _o category is_identifier_key
+    gen is_pii = ""
+    gen action = ""
+    if _N == 0 set obs 1
+    export excel using "`workbook'", sheet("likely_pii") sheetreplace firstrow(variables)
+    use `all', clear
+    keep if category=="other"
+    gen byte _k = keyword_hit==""
+    sort _k dataset variable
+    drop _k category is_identifier_key
+    if _N == 0 set obs 1
+    export excel using "`workbook'", sheet("other_variables") sheetreplace firstrow(variables)
+    use `all', clear
+    contract category
+    list, clean noobs
+end
+
+program define _pii_classify_one
     version 16
     syntax , OUT(string) DATAset(string) [IDKeys(string) APPend]
     local DIRECT  "name dob birth address phone contact mobile cnic national email caste gps latitude longitude coord"

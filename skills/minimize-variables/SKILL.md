@@ -8,11 +8,15 @@ description: >-
   (raw extracts carry columns the analysis never uses -- open-ended text, GPS,
   enumerator notes) and housekeeping. Builds the keep-list from the do-files the
   master actually runs (comments ignored), classes every variable by HOW it is
-  used, keeps ID/merge/sort keys, drops in two rounds and proves nothing broke by
+  used, keeps ID/merge/sort keys, drops in one round and proves nothing broke by
   re-running. Examples are in Stata (.do/.dta); the method is language-agnostic.
 ---
 
 # Minimize variables to what the package uses
+
+Conventions (every step a script in the project's `code/`, paths from one config, one
+workbook, loud failure): `shared/conventions.md`. Keys come from the ID inventory
+(`id_inventory.xlsx`, built at set-up by the **map-ids** skill).
 
 Shipping only the used columns removes exposure (a raw extract can carry
 hundreds of columns the results never touch) and shrinks the package. The risk is dropping something used
@@ -22,50 +26,109 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
 
 1. **Only the do-files the master reaches count.** A folder can hold dead
    scripts and calls commented out of the master (steps that cannot run on
-   public data, steps from other languages or old code). `scripts/reachable_dofiles.py <release> <master.do …>`
-   follows every `do`/`include`/`run` line from the master, comments stripped,
-   `$root`/macro paths resolved, and prints the reachable list (unreachable ones on
-   stderr). `scripts/make_links.sh` builds a space-free symlink tree of those files
-   and of the datasets (the ado splits its lists on spaces).
+   public data, steps from other languages or old code).
+   `shared/reachable_dofiles.py <release> <master.do …> > dofiles.txt` follows every
+   `do`/`include`/`run` line from the master, comments stripped, `$root`/macro paths
+   resolved, and writes the reachable list (unreachable ones on stderr: save them for
+   the report). List the study datasets the same way, one path per line, relative to
+   the package root (`datasets.txt`; example data inside third-party `ado/` folders is
+   not study data).
 
-2. **Build the keep-list with `find_used_variables`.** Put `scripts/` on the
-   adopath; `find_used_variables, dofiles("…") datasets("…") outdir(<dir>)
-   alwayskeep("<id / merge / sort / panel key patterns>")` — the variables of the
-   user's ID inventory (`code-package/references/id-inventory.md`), not names
-   guessed from the data. It tokenises the reachable
-   do-files with comments removed (`// …`, `* …` lines, `/* … */` blocks across
-   lines) and marks a variable *used* if referenced by exact name, a wildcard/glob
-   (e.g. `t_*_irt`, `*_va`, `x*_q1`), a macro-built name (e.g. ``s`i'_q`j' `` → `s*_q*`),
-   an `a-b` range, a `reshape` stub, a `renpfix` prefix, or a `keepusing()` list —
-   a `*` glued to a name (`x*100`) also registers its literal pieces. The
-   `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
-   `referenced_in` (dofile:line of each use, up to 20), `calc_context` and
-   `calc_via` (is it computed with, directly, through a pattern, or under the name
-   it acquires through `rename A* B*` or a rename to a fixed name such as
-   ``rename q`x'_s`y' income``), and `class`:
-   - `used-calc` — computed with somewhere (gen, egen, regressions, collapse,
-     reshape, merge/sort keys, …);
-   - `structural-only` — named only in structural commands (keep, drop, order,
-     rename, keepusing, format, label, …); includes one *pattern anchor* per
-     wildcard family whose every member is otherwise droppable, so a `keep x*`
-     cannot become empty. Not dropped; flagged for the authors;
-   - `wildcard-only-droppable` — reached only through wildcards/ranges that also
-     match other variables (for example `drop sec4*`, `rename r1_* r_*`,
-     `drop _merge*`), never in a calculation, also after renames. Droppable
-     without breaking the code;
+2. **Build the keep-list with `find_used_variables` — a static read of the do-files,
+   nothing is run.** Put `scripts/` on the adopath;
+   `find_used_variables, dofiles(dofiles.txt) datasets(datasets.txt) root(<release>)
+   outdir(<dir>) alwayskeep("<id / merge / sort / panel keys>")` — the keys are the
+   variables of the user's ID inventory, not names guessed from the data. It tokenises
+   the reachable do-files with comments removed (`// …`, `* …` lines, `/* … */` blocks)
+   and marks a variable *used* if referenced by exact name, a wildcard (`t_*_irt`,
+   `*_va`), an `a-b` range, a `reshape` stub, a `renpfix` prefix or a `keepusing()`
+   list. These rules keep it from over-counting:
+   - **case-sensitive** matching, as Stata's variable names are (`s*` does not reach
+     `S_SEC8_q3`);
+   - **macro-built names are filled in with the value the macro holds at that line** —
+     the do-file is read top to bottom, as Stata runs it: a loop macro takes its literal
+     list (``forvalues i = 1/12``, ``foreach i in a b``, ``foreach i of numlist``), so
+     ``hf`i'_q2`` becomes `hf1_q2 … hf12_q2`; ``local y = 8`` holds until the next
+     definition of `y`, and ``local y = `x' + 2`` is worked out from `x` (so
+     ``rename gs`x'_s`y'q6 fans`` names one variable, not every `gs*_s*q6`). A macro a
+     loop redefines from itself (a counter) or whose value comes from the run (`r()`,
+     `levelsof`, varlists, other files) leaves a wildcard (``hf`i'_q2`` → `hf*_q2`);
+   - **a line continued with `///` belongs to its command**: the variables on the
+     second line of a `keep` or `rename` are named by `keep` or `rename`;
+   - **names the code creates match nothing**: the target of `gen`/`egen` cannot be an
+     existing variable (`gen` fails if it exists), so ``gen s`x' = …`` protects no `s*`
+     variable of the data — nor does the same macro-built name collecting those new
+     variables elsewhere in that file (``local L `L' s`x'``). Right-hand sides and
+     literal names/wildcards on other lines still count;
+   - **a rename is not a use.** A variable that is only renamed — and whose new name is
+     never computed with — is unused, all the more when a wildcard reached it. Exact,
+     grouped and prefix renames (`rename a b`, `rename (a b) (c d)`, `rename A* B*`)
+     carry a use of the *new* name back to the variable that receives that name, and to
+     no other;
+   - **three constructs prove nothing and are ignored**: a wildcard with no letter in its
+     literal part (`**12`); `rename * *_suffix`, which renames whatever happens to be
+     in memory at that line; and a pattern renamed to one fixed name (the macros
+     unknown) when it matches several variables of a dataset — only one of them can be
+     meant, and the run says which;
+   - every member of an `a-b` **range** counts as used: a range follows the dataset's
+     variable order, so dropping a member changes what it covers.
+   The `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
+   `referenced_in` (dofile:line, up to 20), `calc_context`/`calc_via` (computed with,
+   directly, through a pattern, or under the name it acquires through `rename A* B*`),
+   and `class`:
+   - `used-calc` — computed with somewhere (gen, egen, regressions, collapse, reshape,
+     merge/sort keys, …), or named in an `if` condition of any command (`keep if age >= 6`);
+   - `structural-only` — named only in structural commands (keep, drop, order, rename,
+     keepusing, format, label, …); includes one *pattern anchor* per wildcard family
+     whose every member is otherwise droppable, so a `keep x*` cannot become empty.
+     Dropping one means editing those lines too; pattern anchors are not dropped, as
+     removing the pattern would change what the command does to variables the code creates;
+   - `wildcard-only-droppable` — reached only through wildcards/ranges that also match
+     other variables, never in a calculation, also after renames;
    - `always-keep`; `drop?` — referenced nowhere.
 
-3. **Drop in two rounds, on the run copy, and let the pipeline arbitrate.**
-   `scripts/drop_unused.do` (template; `$ROUND` 1 drops `drop?`, 2 drops
-   `wildcard-only-droppable`; writes a manifest with type/label per variable).
-   After each round run the package's master end to end and compare **every**
-   output file with a snapshot taken before any drop (`compare-code-results`,
-   `compare_before_after.py`): 0 errors and all files identical is the proof. When
-   the run fails it names the construct the static scan missed; typical examples
-   of such constructs, which the rules above cover, are a suffix wildcard
-   (`*_va`), `reshape` stubs, a `*` used as multiplication, a rename to a fixed
-   name, a family whose every member was droppable, and a tab-indented `cap drop`.
-   Drop from the **release copy only**.
+3. **Drop in one round, on the run copy, and let the re-run arbitrate.** Copy
+   `scripts/drop_unused.do` (template) into the project's `code/`: it drops `drop?` and
+   `wildcard-only-droppable` (and `structural-only` with `$DROP_STRUCTURAL=1`, together
+   with a project script that edits the lines naming them and lists every change), and
+   writes the manifest as the `dropped` tab of the same workbook. Drop a structural-only
+   variable only when every line naming it holds its literal name (a line that reaches it
+   through a macro-built name, ``ch`x'_bmi``, cannot be edited safely) — keep the others. Snapshot the outputs
+   of the run copy *before* the drop, run the package's master end to end after it, and
+   compare every output file (`shared/compare_before_after.py`): 0 errors and all files
+   identical is the proof. Inside a full de-identification (code-package) this run only
+   checks the package still runs; the outputs are compared once, original against cleaned
+   package, at the end.
+
+   **The put-back loop.** When the run halts on a missing variable it names what the
+   static read missed (a macro-built name it could not fill in, a chain of renames).
+   `scripts/restore_missing.py` puts back **only the dropped variables tied to that
+   halt** — the variable itself, the dropped variables matching the missing pattern,
+   those a rename would have given the missing name, those the halting command names —
+   never everything a do-file mentions; a halt it cannot tie to a dropped variable stops
+   the loop for a person to look. A retry does not start from zero:
+   `scripts/resume_guards.py` skips the do-files that had run to their end before the
+   halt, so each retry costs the halting do-file onwards. In `run_all.sh`:
+
+   ```
+   mode=full
+   for try in $(seq 1 60); do
+       make_run_copy [refresh when mode=resume: do-files and source data copied again,
+                      built files kept]; edit structural lines; drop
+       [mode=resume] resume_guards.py <log> <run copy> dofiles.txt
+       run the master -> <log>
+       no error:  mode=full -> done;  mode=resume -> mode=full (confirm from scratch)
+       error:     restore_missing.py <log> ...   0 -> mode=resume
+                                                 2 -> resume: mode=full; full: STOP
+   done
+   ```
+
+   A resumed pass is a shortcut, never the proof: the loop always ends on one run of the
+   whole package from a fresh copy, nothing skipped. List every variable put back, with
+   the line that needed it, in the report.
+   Outputs that differ only beyond the 6th significant digit
+   (full-precision exports) are "same up to numerical precision"; say so, do not call
+   them identical. Drop from the **release copy only**.
 
 4. **Report both levels.** Per dataset: variables, kept, used-calc,
    structural-only, wildcard-only, dropped; per variable: the manifest with type,

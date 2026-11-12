@@ -1,47 +1,32 @@
-* id_leak_tests.do -- TEMPLATE: identifier leak tests against private crosswalks.
-* Set the globals (or `do` a config file):
+* id_leak_tests.do -- TEMPLATE: prove no original identifier survives in a release, using the
+* private old -> new crosswalks. Copy into the project's code/ and set (in its config.do):
 *   $DATADIR   folder with the RELEASE datasets     $DTALIST  text file, one dataset path per line
-*   $OUTDIR    where the CSVs go                    $SCRATCH  PRIVATE folder for the watch lists (never shipped)
-*   $XWALK     folder with the crosswalk .dta files
-*   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old id column> <new id column>"
-*   $IDVARS_fam1 "var1 var2 ...": the USER'S ID INVENTORY -- the variables of that family
-*              (names; every dataset holding the name). A listed variable is tested whatever
-*              its name or type. Variables the name scan finds that are NOT listed are
-*              reported as candidates (source = scan, not tested) for the user to accept.
-*   optional $IDALIAS_fam1 "stem1 stem2 ...": extra name stems for that scan (by default a
-*              variable is a candidate of family F when its lowercased name contains F).
-*   With no $IDVARS_ global at all the scan decides by itself and labels its rows `inferred`.
-*
-* Part A (from the crosswalks): ALL OLD, ALL NEW, OLD-ONLY (old minus new) per family, and a
-*   size table -- the overlap says how informative the membership test is for that family.
-* Part B, test 1 (per identifier variable, distinct values): n_outside_image (not a legal new
-*   id) and n_in_old_only (provably an old id); expected_hits_if_unscrambled = n_distinct x
-*   share_old_only, what an UNSCRAMBLED column would show.
-*   Which variables are identifiers: the user's inventory ($IDVARS_fam); unlisted name-scan
-*   hits are exported as candidates; without an inventory a scan hit is kept only if numeric
-*   with > 2 distinct values (0/1 indicators that merely mention the word are excluded).
-*   The list, with its source (inventory / scan / inferred), is identifier_variables.csv.
-* Test 2: digit-only string values >= 10,000 against every family's OLD-ONLY set.
-* Test 3 (old id elsewhere in the row, column-wise): recover each row's OLD id through the
-*   crosswalk (new -> old); for EVERY other column count rows equal to it; a column equal on
-*   >= 99% of its non-missing rows and on >= 10 rows is an old-id column kept by mistake.
+*   $XWALK     folder with the crosswalk .dta files (private, read-only)
+*   $WATCH     PRIVATE folder for the watch lists (re-identification keys: never shipped)
+*   $WORKBOOK  the review workbook; tabs id_watchlist_sizes, id_crossref_numeric (one row per
+*              tested variable), id_mergeback_rowtest
+*   $IDFAMS    "fam1 fam2 ..."   and, per family,  $XW_fam1 "<crosswalk file> <old col> <new col>"
+*   $IDVARS_fam1 "var1 var2 ...": the user's ID inventory -- the variables of that family
+*              (every dataset holding the name). Required: ask the user for it. Id-like
+*              variables NOT listed are the map-ids skill's job (id_inventory.xlsx, tab candidates).
+* Watch lists (from the crosswalks): ALL OLD, ALL NEW (the image) and OLD-ONLY (old ids that are
+*   never a legal new value); their sizes and overlap say how informative test 1 is.
+* Test 1 (per listed variable, distinct values): n_outside_image (not a legal new id) and
+*   n_in_old_only (provably an old id); expected_hits_if_unscrambled = n_distinct x share old-only.
+* Test 2: each row's OLD id recovered through the crosswalk; every other column equal to it on
+*   >= 99% of its non-missing rows and >= 10 rows is an old-id column kept by mistake.
+* How much ORDER each map keeps (rank correlation) is the check-id-order skill's job.
 * ---------------------------------------------------------------------------------------------
 * ---- Part A: watch lists ----
-cap mkdir "$SCRATCH"
+cap mkdir "$WATCH"
 tempname S
-file open `S' using "$OUTDIR/id_watchlist_sizes.csv", write replace
-file write `S' "family,n_old_ids,n_new_ids,n_overlap_old_in_new,n_old_only,share_old_only,spearman_old_new,order_retained" _n
+tempfile WS
+file open `S' using `WS', write replace
+file write `S' "family,n_old_ids,n_new_ids,n_overlap_old_in_new,n_old_only,share_old_only" _n
 foreach fam of global IDFAMS {
     local spec : word 1 of ${XW_`fam'}
     local ocol : word 2 of ${XW_`fam'}
     local ncol : word 3 of ${XW_`fam'}
-    * rank retention: Spearman correlation between old and new ids over the crosswalk itself.
-    * ~0 = the map is a random relabel; |rho| near 1 = order preserved, i.e. anyone holding the
-    * original ids re-identifies every row with one sort -- reported as a weakness.
-    use "$XWALK/`spec'", clear
-    quietly spearman `ocol' `ncol'
-    local rho = r(rho)
-    local ret = cond(abs(`rho')<0.1,"no",cond(abs(`rho')<0.9,"partial","YES (order-preserving)"))
     * ALL OLD
     use "$XWALK/`spec'", clear
     keep `ocol'
@@ -49,7 +34,7 @@ foreach fam of global IDFAMS {
     drop if missing(val)
     duplicates drop
     sort val
-    save "$SCRATCH/WL_old_`fam'.dta", replace
+    save "$WATCH/WL_old_`fam'.dta", replace
     local nold = _N
     * ALL NEW  (= the "image" set)
     use "$XWALK/`spec'", clear
@@ -58,35 +43,36 @@ foreach fam of global IDFAMS {
     drop if missing(val)
     duplicates drop
     sort val
-    save "$SCRATCH/WL_image_`fam'.dta", replace
+    save "$WATCH/WL_image_`fam'.dta", replace
     local nnew = _N
     * OLD-ONLY = old ids that are not in the new set
-    merge 1:1 val using "$SCRATCH/WL_old_`fam'.dta"
+    merge 1:1 val using "$WATCH/WL_old_`fam'.dta"
     keep if _merge==2
     keep val
     sort val
-    save "$SCRATCH/WL_origonly_`fam'.dta", replace
+    save "$WATCH/WL_origonly_`fam'.dta", replace
+    * a text copy for the text-file sweep (scan_text_files.py)
+    quietly export delimited val using "$WATCH/WL_origonly_`fam'.txt", novarnames replace
     local noo = _N
-    file write `S' "`fam',`nold',`nnew',`=`nold'-`noo'',`noo',`=round(`noo'/`nold',0.0001)',`=round(`rho',0.001)',`ret'" _n
-    di as txt "`fam': old=`nold' new=`nnew' old-only=`noo' (share `=round(`noo'/`nold',0.001)') spearman=`=round(`rho',0.001)' order retained: `ret'"
+    file write `S' "`fam',`nold',`nnew',`=`nold'-`noo'',`noo',`=round(`noo'/`nold',0.0001)'" _n
+    di as txt "`fam': old=`nold' new=`nnew' old-only=`noo' (share `=round(`noo'/`nold',0.001)')"
 }
 file close `S'
 * ---- Part B: tests ----
-tempname ID T1 T2 T3
-file open `ID' using "$OUTDIR/identifier_variables.csv", write replace
-file write `ID' "dataset,variable,family,source,storage_type,n_nonmiss,n_distinct,kept_as_identifier,reason" _n
-* is an inventory provided at all?
-local HAVEINV = 0
+tempname T1 T3
+tempfile F_id_crossreference_numeric F_id_mergeback_rowtest
+* the inventory is required
 foreach fam of global IDFAMS {
-    if `"${IDVARS_`fam'}"' != "" local HAVEINV = 1
+    if `"${IDVARS_`fam'}"' == "" {
+        di as error "no \$IDVARS_`fam': the ID inventory is required (ask the user which variables hold `fam' ids)"
+        exit 198
+    }
 }
-file open `T1' using "$OUTDIR/id_crossreference_numeric.csv", write replace
+file open `T1' using `F_id_crossreference_numeric', write replace
 file write `T1' "dataset,variable,family,n_nonmiss,n_distinct,n_outside_image,n_in_old_only,share_old_only,expected_hits_if_unscrambled,min,max" _n
-file open `T2' using "$OUTDIR/id_crossreference_string.csv", write replace
-file write `T2' "dataset,variable,n_digit_values_ge_10000,family,n_outside_image,n_in_old_only" _n
-file open `T3' using "$OUTDIR/id_mergeback_rowtest.csv", write replace
+file open `T3' using `F_id_mergeback_rowtest', write replace
 file write `T3' "dataset,id_variable,family,other_column,n_rows_with_old_id,n_rows_other_nonmiss,n_rows_equal,share_of_nonmiss,column_is_old_id" _n
-import delimited using "$OUTDIR/id_watchlist_sizes.csv", clear varnames(1)
+import delimited using `WS', clear varnames(1)
 foreach fam of global IDFAMS {
     quietly levelsof share_old_only if family=="`fam'", local(sh)
     local SHARE_`fam' = `sh'
@@ -98,8 +84,6 @@ while r(eof)==0 {
     quietly use "$DATADIR/`rel'", clear
     quietly ds
     local allv `r(varlist)'
-    quietly ds, has(type string)
-    local strv `r(varlist)'
     foreach v of local allv {
         local lv = strlower("`v'")
         local fam ""
@@ -110,18 +94,6 @@ while r(eof)==0 {
                 if "`fam'"=="" & "`lv'"==strlower("`s'") {
                     local fam "`f'"
                     local src "inventory"
-                }
-            }
-        }
-        * 2. the name scan: candidates (name contains the family name or an $IDALIAS_ stem)
-        if "`fam'"=="" {
-            foreach f of global IDFAMS {
-                local stems "`f' ${IDALIAS_`f'}"
-                foreach s of local stems {
-                    if "`fam'"=="" & strpos("`lv'", strlower("`s'")) {
-                        local fam "`f'"
-                        local src = cond(`HAVEINV', "scan", "inferred")
-                    }
                 }
             }
         }
@@ -140,20 +112,9 @@ while r(eof)==0 {
                 local nd = _N
             restore
         }
-        if "`src'"=="scan" {
-            file write `ID' `""`rel'","`v'","`fam'","scan","`ty'",`nnm',`nd',0,"name-scan candidate NOT in the user inventory: accept (add to IDVARS_`fam') or reject""' _n
-            continue
-        }
         if !`isnum' {
-            file write `ID' `""`rel'","`v'","`fam'","`src'","`ty'",`nnm',`nd',0,"string variable (covered by test 2)""' _n
             continue
         }
-        if "`src'"=="inferred" & `nd'<=2 {
-            file write `ID' `""`rel'","`v'","`fam'","inferred","`ty'",`nnm',`nd',0,"name mentions a family word but it is a 0/1 indicator, not an id (no inventory to confirm)""' _n
-            continue
-        }
-        local why = cond("`src'"=="inventory","identifier (user inventory)","identifier inferred from its name (no inventory provided)")
-        file write `ID' `""`rel'","`v'","`fam'","`src'","`ty'",`nnm',`nd',1,"`why'""' _n
         if `nnm'==0 continue
         * ---- Test 1 ----
         preserve
@@ -164,16 +125,16 @@ while r(eof)==0 {
             local mn = r(min)
             local mx = r(max)
             rename `v' val
-            quietly merge m:1 val using "$SCRATCH/WL_image_`fam'.dta", keep(master match) gen(_mi)
+            quietly merge m:1 val using "$WATCH/WL_image_`fam'.dta", keep(master match) gen(_mi)
             quietly count if _mi==1
             local outimg = r(N)
             drop _mi
-            quietly merge m:1 val using "$SCRATCH/WL_origonly_`fam'.dta", keep(master match) gen(_mo)
+            quietly merge m:1 val using "$WATCH/WL_origonly_`fam'.dta", keep(master match) gen(_mo)
             quietly count if _mo==3
             local inold = r(N)
             file write `T1' `""`rel'","`v'","`fam'",`nnm',`nd',`outimg',`inold',`SHARE_`fam'',`=round(`nd'*`SHARE_`fam'',1)',`mn',`mx'"' _n
         restore
-        * ---- Test 3: old id recovered through the crosswalk, compared column by column ----
+        * ---- Test 2: old id recovered through the crosswalk, compared column by column ----
         local spec : word 1 of ${XW_`fam'}
         local ocol : word 2 of ${XW_`fam'}
         local ncol : word 3 of ${XW_`fam'}
@@ -215,35 +176,18 @@ while r(eof)==0 {
             }
         restore
     }
-    * ---- Test 2: digit-only strings, values >= 10,000, against every family ----
-    foreach v of local strv {
-        preserve
-            quietly keep `v'
-            quietly gen double val = real(`v')
-            quietly keep if !missing(val) & regexm(trim(`v'),"^[0-9]+$") & val>=10000
-            if _N>0 {
-                quietly keep val
-                quietly duplicates drop
-                local nv = _N
-                foreach fam of global IDFAMS {
-                    quietly merge m:1 val using "$SCRATCH/WL_image_`fam'.dta", keep(master match) gen(_mi)
-                    quietly count if _mi==1
-                    local outimg = r(N)
-                    drop _mi
-                    quietly merge m:1 val using "$SCRATCH/WL_origonly_`fam'.dta", keep(master match) gen(_mo)
-                    quietly count if _mo==3
-                    local inold = r(N)
-                    drop _mo
-                    if `inold'>0 file write `T2' `""`rel'","`v'",`nv',"`fam'",`outimg',`inold'"' _n
-                }
-            }
-        restore
-    }
     file read IN line
 }
 file close IN
-file close `ID'
 file close `T1'
-file close `T2'
 file close `T3'
-di as txt "id_leak_tests done"
+* ---- write the tabs ----
+import delimited using `WS', clear varnames(1) stringcols(1)
+export excel using "$WORKBOOK", sheet("id_watchlist_sizes") sheetreplace firstrow(variables)
+foreach t in id_crossreference_numeric id_mergeback_rowtest {
+    import delimited using `F_`t'', clear varnames(1) stringcols(_all) bindquote(strict)
+    if _N == 0 set obs 1
+    local sh = subinstr("`t'", "crossreference", "crossref", 1)
+    export excel using "$WORKBOOK", sheet("`sh'") sheetreplace firstrow(variables)
+}
+di as txt "id_leak_tests done -> $WORKBOOK"

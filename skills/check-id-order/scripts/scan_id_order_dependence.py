@@ -3,8 +3,9 @@
 id variable? If it does, a random (non-monotone) scramble changes results, and the fix is in
 the code or the map design -- NOT an order-preserving map, which is trivially reversible.
 
-Usage: scan_id_order_dependence.py OUT.csv "id1 id2 ..." dofile1.do [dofile2.do ...]
-       (pass the do-files the master actually runs: see minimize-variables/reachable_dofiles.py)
+Usage: scan_id_order_dependence.py WORKBOOK.xlsx "id1 id2 ..." DOFILES.txt
+       DOFILES.txt: the do-files the master actually runs, one per line
+       (shared/reachable_dofiles.py writes it). Writes tab `code_scan` of WORKBOOK.
 
 One row per hit: file, line, the code, id variable, construct, LEVEL, suggested fix.
   A  magnitude   the id's VALUE is compared or binned: e.g. `if id > 154`, inrange(id,..), recode id
@@ -22,11 +23,15 @@ One row per hit: file, line, the code, id variable, construct, LEVEL, suggested 
                  problem, but the literal must be recoded through the map
 Comments are stripped first (// ..., * lines, /* */ blocks). The scan is conservative -- every
 hit is a place to LOOK; the arbiter is empirical: scramble randomly on a copy, run the package,
-compare every output with compare_before_after.py. Identical outputs = no dependence.
+compare every output (id_order_test.do + shared/compare_before_after.py). Identical = no dependence.
 """
-import sys, re, csv, os
+import sys, re, os
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [HERE, os.path.join(HERE, "..", "..", "..", "shared")]   # project copy, then plugin
+from xlsx_sheet import write_sheet
 
-out, ids, files = sys.argv[1], sys.argv[2].split(), sys.argv[3:]
+out, ids = sys.argv[1], sys.argv[2].split()
+files = [l.strip() for l in open(sys.argv[3]) if l.strip()]
 ID = "(" + "|".join(re.escape(i) for i in ids) + ")"
 W = r"(?<![A-Za-z0-9_])"      # word boundaries that respect Stata names
 E = r"(?![A-Za-z0-9_])"
@@ -70,9 +75,8 @@ for f in files:
             rows.append([os.path.basename(f), i, l.strip()[:160], idv, construct, level, fix])
             break
 rows.sort(key=lambda r: (r[5], r[0], r[1]))
-with open(out, "w", newline="") as fh:
-    csv.writer(fh).writerows([["file", "line", "code", "id_variable", "construct", "level", "suggested_fix"]] + rows)
+write_sheet(out, "code_scan", ["file", "line", "code", "id_variable", "construct", "level", "suggested_fix"], rows)
 by = {}
 for r in rows: by[r[5]] = by.get(r[5], 0) + 1
 print("hits by level:", {k: by.get(k, 0) for k in "ABCDH"}, "->", out)
-print("levels A-C need a look; then the arbiter: random scramble on a copy, run, compare_before_after.py")
+print("levels A-C need a look; the arbiter is id_order_test.do: random relabel on a copy, run, compare")

@@ -1,4 +1,4 @@
-# _reachable_dofiles.py -- which do-files does the package's master actually run?
+# reachable_dofiles.py -- which do-files does the package's master actually run?
 #
 # A package folder can hold do-files that no master calls any more (dead code) or whose
 # call is commented out in the master. Variables referenced only in such files are NOT used
@@ -8,7 +8,7 @@
 # wildcard), and prints the list of reachable do-files. Unreachable do-files are listed on
 # stderr for the reviewer.
 #
-#   usage: _reachable_dofiles.py <release folder> <master1.do> [master2.do ...]
+#   usage: reachable_dofiles.py <release folder> <master1.do> [master2.do ...] > dofiles.txt
 import sys, os, re, glob
 
 release = sys.argv[1]

@@ -14,7 +14,17 @@ description: >-
 
 # Compare code results systematically
 
-Confirm the cleaned package reproduces results. Every comparison produces a
+Conventions (every step a script in the project's `code/`, paths from one config, one
+workbook with a `result` cell, loud failure): `shared/conventions.md`.
+
+Confirm the cleaned package reproduces results. Two comparisons, no more:
+1. **the original package against the cleaned one** — every output file of the package as
+   received (run here, with only the edits needed to run it) against the cleaned package's
+   (`shared/compare_before_after.py`): what the whole clean-up changed;
+2. **the cleaned package against the reference** — the published paper, or the internal
+   (identified) package run on the same machine: does it reproduce the results.
+Intermediate runs during the work (after dropping variables, after a code fix) only check
+that the package runs end to end; their outputs are not compared. Every comparison produces a
 full side-by-side table **and** a summary — never just a headline check — and all
 of them end up in **one comparison workbook** (tabs: summary, tables, appendix,
 in-text, figures, before-vs-after).
@@ -51,7 +61,7 @@ not assume the package is wrong.
 
 **In-text numbers** count too: pair every in-text log the package writes with the
 sentence it supports (`scripts/compare_intext.py` with a hand-written mapping
-CSV: log, regex that extracts the statistic, which occurrence, paper value,
+CSV, kept as an input: log, regex that extracts the statistic, which occurrence, paper value,
 sentence, line). Logs with no sentence quoting their value are listed without a
 verdict.
 
@@ -62,43 +72,34 @@ same machine**: across machines, font family and page scaling alone change 4–7
 of pixels and every byte, hiding or faking a data difference. So when the
 reference figures were built elsewhere, re-run the reference package's *figure
 code* locally and compare against that rendering with
-`scripts/compare_figures.py REF_DIR NEW_DIR OUT.csv`: identical content streams
+`scripts/compare_figures.py REF_DIR NEW_DIR <workbook> <work dir>`: identical content streams
 and 0.0000 % differing pixels is the standard. Stata's `.gph` working files embed
 timestamps and in-memory object handles that differ on every run; ignore those
 lines (`compare_before_after.py` does).
 
-## Before vs after a change to the package
+## Original against cleaned package
 
-After minimisation or any edit, snapshot the output folders, re-run, and compare
-every file with `scripts/compare_before_after.py BEFORE_DIR AFTER_DIR OUT.csv`
-(text outputs with timestamps stripped, PDFs/EPS on content, `.gph` on content
-minus handles). "N of N identical, 0 differ, 0 missing" is the proof that the
-change altered nothing.
+Snapshot the output folders of the original package's run and of the cleaned package's run, and compare every
+file with `shared/compare_before_after.py BEFORE_DIR AFTER_DIR <workbook> [tab]` (text
+outputs with timestamps stripped, PDFs/EPS on content, `.gph` on content minus Stata's
+object handles). "N of N identical, 0 differ, 0 missing" is the proof that the clean-up
+altered nothing; full-precision exports differing only beyond the 6th significant digit are
+"same up to numerical precision" — say so, do not call them identical.
 
 ## Run the comparison (systematic, every estimate)
 
 For two estimate tables with a shared key, `scripts/compare_tables.py REF.csv
-NEW.csv OUT_DIR` differences at the reported precision and writes
-`comparison_review.xlsx` (`full` with an empty `reason` column, `summary`); it
+NEW.csv <workbook> [name]` differences at the reported precision and writes tabs
+`<name>` (every cell, with an empty `reason` column) and `<name>_summary`; it
 exits nonzero on any difference. For every differing cell record a specific
-reason, from the usual suspects: a rounding boundary; a Stata / user-package
-version (`reghdfe`, `lassopack`, `sensemakr`); a documented correction in the
-package's change log; **dependence on id sort order or magnitude** — an estimator
-that reads row order (UJIVE, some bootstraps/jackknives), a cutoff on the id
-(`if id > k`), dummies numbered by id rank (`egen group`, `tab, gen`), a row picked
-by position after `sort id` (`_n`, `duplicates drop`, `sample`) — any of which
-moves when ids are scrambled non-monotonically (see `scramble-ids`, step 0, and
-its scanner); an adaptation made to get the package to run; a genuine data
-difference.
+reason — the checklist is in `references/running-and-capturing.md` (rounding boundary,
+package version, documented correction, id-order dependence, an adaptation made to run,
+a genuine data difference). For id-order dependence, `check-id-order` says where.
 
 ## Account for the whole paper, both directions
 Some code produces extras not in the published subset (note them); some sections
 need external data or software the package doesn't ship. Script table numbering is often offset from the published one — map by content.
 
 ## Running the two packages (they may differ)
-`references/running-and-capturing.md` covers running Stata headless, the
-runnability-fix catalogue, and capture gotchas. Typical portability defects to
-report (not silently fix), for example: Windows backslash paths (`"$root\data\x"`
-— file not found on macOS/Linux), `ssc install` of a package that actually lives on
-the Stata Journal (e.g. `zanthro` = `dm0004_1`), a bundled `ado/` folder never added
-to the adopath, a release whose `$root` points at the *internal* identified folder.
+`references/running-and-capturing.md` covers running Stata headless, the runnability-fix
+catalogue, the portability defects to report (not silently fix) and capture gotchas.

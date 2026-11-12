@@ -2,19 +2,18 @@
  *
  * This is a reference template to COPY and edit per package (which id maps, which
  * datasets, which composite keys) -- not a black-box command. It writes ONE review
- * workbook (verify_review.xlsx: sheets idmap_checks, dataset_diffs, summary) and,
- * on any failure, drops a verify_FAILED.flag sentinel. Stata batch returns OS exit
- * 0 even on error, so detect failure via the sentinel / the summary `result` cell,
- * not the exit code (the `exit 459` below still halts an in-Stata do-file chain).
+ * workbook (verify_review.xlsx: sheets idmap_checks, dataset_diffs, summary). Stata
+ * batch returns OS exit 0 even on error, so read the summary `result` cell, not the
+ * exit code (the `exit 459` below still halts an in-Stata do-file chain).
+ * How much order each map keeps (Spearman rho) is the check-id-order skill's job.
  *
  * Every check aligns by the scrambled KEY, never by row position (_n): merges
  * re-sort, so _n-alignment silently reports false mismatches.
  */
+* ADAPT: set these in the project's config.do (paths derived from the project folder):
+*   $orig  original datasets      $deid  de-identified datasets
+*   $keys  folder with idmap_*.dta (private)      $out  where the workbook goes
 set more off
-gl orig "orig"          // original datasets
-gl deid "deid"          // de-identified datasets
-gl keys "keys"          // folder with idmap_*.dta
-gl out  "."             // where the workbook + sentinel go
 
 * one entry per id map built in step 1, from the user's ID inventory: "<idname> <lo> <hi>", where
 * <idname> is the id (the crosswalk is idmap_<idname>.dta) and <lo> <hi> the new range that was
@@ -23,7 +22,7 @@ gl out  "."             // where the workbook + sentinel go
 local IDSPECS `""<idname1> <lo1> <hi1>" "<idname2> <lo2> <hi2>""'
 
 *==================================================================*
-* A/B/C -- per correspondence table: 1-to-1, new-range-disjoint, rank retention (Spearman)
+* A/B/C -- per correspondence table: 1-to-1, new range disjoint from the old, inside the range
 *==================================================================*
 tempfile idres
 postfile P str32 check str32 item str8 status str244 detail using "`idres'", replace
@@ -45,9 +44,6 @@ foreach spec of local IDSPECS {
     local nmin = r(min)
     local nmax = r(max)
     local overlap = !(`nmax' < `omin' | `nmin' > `omax')
-    quietly spearman `v' `v'_pubrep
-    local rho = r(rho)
-    post P ("rank_retention") ("`v'") (cond(abs(`rho')<0.1,"OK",cond(abs(`rho')<0.5,"WARN","FAIL"))) ("Spearman old vs new = " + string(`rho',"%6.3f") + " (~0 expected; high = order preserved = reversible)")
     post P ("1-to-1")     ("`v'") (cond(`dold'==`n' & `dnew'==`n',"OK","FAIL")) ("distinct old=`dold' new=`dnew' of N=`n'")
     post P ("no-overlap") ("`v'") (cond(`overlap'==0,"OK","FAIL"))              ("old[`omin',`omax'] new[`nmin',`nmax']")
     post P ("in-range")   ("`v'") (cond(`nmin'>=`lo' & `nmax'<=`hi',"OK","FAIL")) ("new ids inside the intended range [`lo',`hi']: observed [`nmin',`nmax']")
@@ -108,7 +104,7 @@ post D ("`DATASET'") ("`deid_only'") ("`orig_only'") ("`vdiff'") ("`unexp'") (`n
 postclose D
 
 *==================================================================*
-* ASSEMBLE ONE REVIEW WORKBOOK + sentinel on failure
+* ASSEMBLE ONE REVIEW WORKBOOK
 *==================================================================*
 use "`idres'", clear
 export excel using "$out/verify_review.xlsx", sheet("idmap_checks") sheetreplace firstrow(variables)
@@ -133,12 +129,8 @@ replace metric = "result"               in 3
 replace value  = cond(`nfail'==0,"PASS","FAIL") in 3
 export excel using "$out/verify_review.xlsx", sheet("summary") sheetreplace firstrow(variables)
 
-capture erase "$out/verify_FAILED.flag"
 if `nfail' > 0 {
-    file open F using "$out/verify_FAILED.flag", write replace
-    file write F "`nfail' verification check(s) FAILED; see verify_review.xlsx" _n
-    file close F
-    di as error "VERIFICATION FAILED (`nfail') -> verify_review.xlsx / verify_FAILED.flag"
+    di as error "VERIFICATION FAILED (`nfail') -> verify_review.xlsx"
     exit 459
 }
 di as result "verification PASSED -> verify_review.xlsx"
