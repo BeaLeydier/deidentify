@@ -42,22 +42,34 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    the reachable do-files with comments removed (`// …`, `* …` lines, `/* … */` blocks)
    and marks a variable *used* if referenced by exact name, a wildcard (`t_*_irt`,
    `*_va`), an `a-b` range, a `reshape` stub, a `renpfix` prefix or a `keepusing()`
-   list. Three rules keep it from over-counting:
+   list. These rules keep it from over-counting:
    - **case-sensitive** matching, as Stata's variable names are (`s*` does not reach
      `S_SEC8_q3`);
-   - **macro-built names are filled in** where the do-file spells the values out
-     (``forvalues i = 1/12``, ``foreach i in a b``, ``foreach i of numlist``, ``local L a b``)
-     — ``hf`i'_q2`` becomes `hf1_q2 … hf12_q2`; values that come from the data
-     (`r()`, `levelsof`, varlists, other files) leave a wildcard (``hf`i'_q2`` → `hf*_q2`);
+   - **macro-built names are filled in with the value the macro holds at that line** —
+     the do-file is read top to bottom, as Stata runs it: a loop macro takes its literal
+     list (``forvalues i = 1/12``, ``foreach i in a b``, ``foreach i of numlist``), so
+     ``hf`i'_q2`` becomes `hf1_q2 … hf12_q2`; ``local y = 8`` holds until the next
+     definition of `y`, and ``local y = `x' + 2`` is worked out from `x` (so
+     ``rename gs`x'_s`y'q6 fans`` names one variable, not every `gs*_s*q6`). A macro a
+     loop redefines from itself (a counter) or whose value comes from the run (`r()`,
+     `levelsof`, varlists, other files) leaves a wildcard (``hf`i'_q2`` → `hf*_q2`);
+   - **a line continued with `///` belongs to its command**: the variables on the
+     second line of a `keep` or `rename` are named by `keep` or `rename`;
    - **names the code creates match nothing**: the target of `gen`/`egen` cannot be an
      existing variable (`gen` fails if it exists), so ``gen s`x' = …`` protects no `s*`
      variable of the data — nor does the same macro-built name collecting those new
      variables elsewhere in that file (``local L `L' s`x'``). Right-hand sides and
      literal names/wildcards on other lines still count;
-   - **two constructs prove nothing and are ignored**: a wildcard with no letter in its
-     literal part (`**12`), and `rename * *_suffix`, which renames whatever happens to be
-     in memory at that line. Exact and grouped renames (`rename a b`,
-     `rename (a b) (c d)`) carry the new name's use back to the old one;
+   - **a rename is not a use.** A variable that is only renamed — and whose new name is
+     never computed with — is unused, all the more when a wildcard reached it. Exact,
+     grouped and prefix renames (`rename a b`, `rename (a b) (c d)`, `rename A* B*`)
+     carry a use of the *new* name back to the variable that receives that name, and to
+     no other;
+   - **three constructs prove nothing and are ignored**: a wildcard with no letter in its
+     literal part (`**12`); `rename * *_suffix`, which renames whatever happens to be
+     in memory at that line; and a pattern renamed to one fixed name (the macros
+     unknown) when it matches several variables of a dataset — only one of them can be
+     meant, and the run says which;
    - every member of an `a-b` **range** counts as used: a range follows the dataset's
      variable order, so dropping a member changes what it covers.
    The `variables` tab of `varusage_review.xlsx` gives per variable: `how`,
@@ -86,11 +98,35 @@ indirectly, so build the keep-list from the code and **prove it by re-running**.
    compare every output file (`shared/compare_before_after.py`): 0 errors and all files
    identical is the proof. Inside a full de-identification (code-package) this run only
    checks the package still runs; the outputs are compared once, original against cleaned
-   package, at the end. When the run halts it names what the static read missed (a
-   macro-built name it could not fill in, a chain of renames): automate the put-back with
-   `scripts/restore_missing.py` in a loop (rebuild the copy, drop, run; on a halt, put the
-   variable back and go again), and list every variable put back, with the line that
-   needed it, in the report. Outputs that differ only beyond the 6th significant digit
+   package, at the end.
+
+   **The put-back loop.** When the run halts on a missing variable it names what the
+   static read missed (a macro-built name it could not fill in, a chain of renames).
+   `scripts/restore_missing.py` puts back **only the dropped variables tied to that
+   halt** — the variable itself, the dropped variables matching the missing pattern,
+   those a rename would have given the missing name, those the halting command names —
+   never everything a do-file mentions; a halt it cannot tie to a dropped variable stops
+   the loop for a person to look. A retry does not start from zero:
+   `scripts/resume_guards.py` skips the do-files that had run to their end before the
+   halt, so each retry costs the halting do-file onwards. In `run_all.sh`:
+
+   ```
+   mode=full
+   for try in $(seq 1 60); do
+       make_run_copy [refresh when mode=resume: do-files and source data copied again,
+                      built files kept]; edit structural lines; drop
+       [mode=resume] resume_guards.py <log> <run copy> dofiles.txt
+       run the master -> <log>
+       no error:  mode=full -> done;  mode=resume -> mode=full (confirm from scratch)
+       error:     restore_missing.py <log> ...   0 -> mode=resume
+                                                 2 -> resume: mode=full; full: STOP
+   done
+   ```
+
+   A resumed pass is a shortcut, never the proof: the loop always ends on one run of the
+   whole package from a fresh copy, nothing skipped. List every variable put back, with
+   the line that needed it, in the report.
+   Outputs that differ only beyond the 6th significant digit
    (full-precision exports) are "same up to numerical precision"; say so, do not call
    them identical. Drop from the **release copy only**.
 

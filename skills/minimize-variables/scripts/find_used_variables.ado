@@ -9,15 +9,22 @@
 *   always-keep     matches alwayskeep()
 * Matching is CASE-SENSITIVE, like Stata's variable names.
 *
-* Macro-built names (s`i'_q`j'):
-*   - filled in with the macro's values when the do-file spells them out: forvalues i = 1/12,
-*     foreach i in a b c, foreach i of numlist 1/5, foreach i of local L, local L a b c,
-*     local x = 1
-*     (several definitions of one name in a file are pooled);
-*   - otherwise (values from the data: r(), levelsof, `: word', varlists, other files ...)
-*     turned into a wildcard (s`i'_q`j' -> s*_q*).
-* Two constructs prove nothing and are ignored: a wildcard without a letter in its literal
-* part ("**12"), and `rename * *_suffix`, which renames whatever happens to be in memory.
+* Macro-built names (s`i'_q`j') are filled with the value the macro holds AT THAT LINE (the
+* do-file is read top to bottom, like Stata runs it):
+*   - a loop macro takes its literal list (forvalues i = 1/12, foreach i in a b c, foreach i
+*     of numlist 1/5, foreach i of local L) for the lines that follow;
+*   - local y = 8 sets y to 8 until the next definition of y; local y = `x' + 2 is worked out
+*     from the values of x in force (arithmetic on numbers only); local L a b c and
+*     local L `L' d are lists;
+*   - a macro a loop redefines from itself (a counter) or whose value comes from the run
+*     (r(), levelsof, `: word', args, varlists ...) is unknown from the loop header on: the
+*     name becomes a wildcard (s`i'_q`j' -> s*_q*).
+* A line continued with /// belongs to the command that started it (the variables of a
+* multi-line keep or rename are named by keep or rename).
+* Three constructs prove nothing and are ignored: a wildcard without a letter in its literal
+* part ("**12"); `rename * *_suffix`, which renames whatever happens to be in memory; and a
+* pattern renamed to one fixed name (rename gs*_s*q6 fans, the macros unknown) when it matches
+* several variables of a dataset -- only one of them can be meant, and the run says which.
 * Names the code CREATES: the target of gen/egen is never an existing variable (gen fails
 * if it exists), so it matches nothing in the data. A macro-built target (gen s`x' = ...)
 * is treated as created everywhere the same macro-built name appears in that do-file (e.g. a
@@ -149,6 +156,12 @@ program define find_used_variables
                 local ENDPTS "`ENDPTS' `a' `b'"
             }
         }
+        * only what can concern this dataset: exact names it holds, patterns and rename pairs
+        * matching at least one of its variables
+        local EXACT_D : list vars & EXACT
+        local EXACTCALC_D : list vars & EXACTCALC
+        mata: _fuv_relevant(`NREN')
+        local nstub : word count `STUBS_D'
         local iv = 0
         foreach v of local vars {
             local u = 0
@@ -162,12 +175,12 @@ program define find_used_variables
             }
             if `u'==1 local h = "always-keep"
             * exact reference
-            local exact = `: list v in EXACT'
+            local exact = `: list v in EXACT_D'
             if `exact' {
                 if `u'==0 local h = "exact"
                 local u = 1
                 if "`key'"=="" local key "`v'"
-                if `: list v in EXACTCALC' {
+                if `: list v in EXACTCALC_D' {
                     local calc = 1
                     local via "exact"
                 }
@@ -186,7 +199,8 @@ program define find_used_variables
             }
             * wildcard patterns
             local matched ""
-            foreach s of local STUBS {
+            forvalues si = 1/`nstub' {
+                local s : word `si' of `STUBS_D'
                 if strmatch("`v'","`s'") {
                     local u = 1
                     if "`h'"=="drop?" local h = "wildcard `s'"
@@ -197,19 +211,20 @@ program define find_used_variables
                         if "`via'"=="" local via "pattern `s'"
                     }
                     * siblings: other variables here matching the same pattern
-                    local n = 0
-                    foreach w of local vars {
-                        if "`w'"!="`v'" & strmatch("`w'","`s'") local ++n
-                    }
+                    local n = `: word `si' of `STUBN_D'' - 1
                     if "`sib'"=="" | "`sib'"=="range-member" local sib "`n'"
                     else if "`sib'"!="endpoint" local sib = string(min(real("`sib'"), `n'))
                 }
             }
             * names acquired through renames: rename old new, rename OLD* NEW* -> NEWprefix + suffix
             if `u'==1 & `calc'==0 {
-                forvalues i = 1/`NREN' {
+                foreach i of local RENIDX {
                     local ro "`RO`i''"
                     local rn "`RN`i''"
+                    * a pattern renamed to ONE fixed name (a macro-built old name whose value the
+                    * read could not fill) can rename only one of the variables it matches, and the
+                    * read cannot tell which: it proves nothing for any of them (the run does)
+                    if strpos("`ro'","*") & !strpos("`rn'","*") & `RENN_`i'' > 1 continue
                     if strmatch("`v'","`ro'") {
                         if strpos("`rn'","*") {
                             local pre = substr("`ro'",1,strpos("`ro'","*")-1)
@@ -371,82 +386,211 @@ string rowvector _fuv_numlist(string scalar t, real scalar ok)
     return(out)
 }
 
-// record a literal value list for macro nm (pooled with earlier definitions)
-void _fuv_addvals(transmorphic MV, string scalar nm, string rowvector vals)
+// ---- macro values IN FORCE at each line (sequential read of the do-file) ---------------------
+// CUR: macro -> the values it can hold at this line; UNK: macros whose value comes from the run
+void _fuv_set(transmorphic CUR, transmorphic UNK, string scalar nm, string rowvector vals)
 {
-    if (asarray_contains(MV, nm)) asarray(MV, nm, (asarray(MV, nm), vals))
-    else asarray(MV, nm, vals)
+    if (cols(vals) == 0) {
+        if (asarray_contains(CUR, nm)) asarray_remove(CUR, nm)
+    }
+    else asarray(CUR, nm, uniqrows(vals')')
+    if (asarray_contains(UNK, nm)) asarray_remove(UNK, nm)
 }
 
-// pass 1 on one line: macro definitions with literal values (MV) and non-literal ones (BAD)
-void _fuv_defs(string scalar s, transmorphic MV, transmorphic BAD)
+void _fuv_unk(transmorphic CUR, transmorphic UNK, string scalar nm)
 {
-    string scalar st, nm, kind, lst, rest, BQ, Q
-    string rowvector vals, w
+    if (asarray_contains(CUR, nm)) asarray_remove(CUR, nm)
+    asarray(UNK, nm, 1)
+}
+
+// 1 if the text still holds a macro reference
+real scalar _fuv_hasref(string scalar s)
+{
+    return(strpos(s, char(96)) > 0 | strpos(s, char(36)) > 0)
+}
+
+// value of a literal expression: a quoted string, or arithmetic on numbers (`x' + 2 once `x'
+// is filled); ok = 0 otherwise
+string scalar _fuv_eval(string scalar e, real scalar ok)
+{
+    real scalar v
+    ok = 1
+    e = strtrim(e)
+    if (ustrregexm(e, "^" + char(34) + "([^" + char(34) + "]*)" + char(34) + "$")) return(ustrregexs(1))
+    if (!ustrregexm(e, "^[-+*/(). 0-9]+$") | !ustrregexm(e, "[0-9]")) {
+        ok = 0
+        return("")
+    }
+    if (_stata("scalar __fuv_e = " + e, 1)) {
+        ok = 0
+        return("")
+    }
+    v = st_numscalar("__fuv_e")
+    if (v >= .) {
+        ok = 0
+        return("")
+    }
+    return(strofreal(v, "%18.0g"))
+}
+
+// the words of a list, each macro-built word filled with the values in force; ok = 0 if a
+// word keeps a reference no value is known for
+string rowvector _fuv_words(string scalar lst, transmorphic CUR, real scalar ok)
+{
+    string rowvector w, out
+    string colvector e
+    real scalar i, j
+    ok = 1
+    out = J(1, 0, "")
+    w = tokens(subinstr(lst, char(34), " "))
+    for (i=1; i<=cols(w); i++) {
+        e = _fuv_expand(w[i], CUR)
+        for (j=1; j<=rows(e); j++) {
+            if (_fuv_hasref(e[j])) {
+                ok = 0
+                return(J(1, 0, ""))
+            }
+            out = out, e[j]
+        }
+    }
+    return(out)
+}
+
+// a line that defines macros: update the values in force
+void _fuv_defs(string scalar s, transmorphic CUR, transmorphic UNK)
+{
+    string scalar st, nm, inc, rest, BQ, Q, v
+    string rowvector vals, w, base
+    string colvector e
     real scalar ok, i
     BQ = char(96); Q = char(39)
     st = ustrregexra(s, _fuv_pfx(), "")
     // macros filled by options or commands whose values come from the run
     rest = st
     while (ustrregexm(rest, "local[(]([A-Za-z_][A-Za-z0-9_]*)[)]")) {
-        asarray(BAD, ustrregexs(1), 1)
+        nm = ustrregexs(1)
         rest = subinstr(rest, ustrregexs(0), " ", 1)
+        _fuv_unk(CUR, UNK, nm)
     }
     if (ustrregexm(st, "^(gettoken|tempvar|tempname|tempfile|args|unab|tokenize)[ ]+(.*)$")) {
         w = tokens(ustrregexra(ustrregexs(2), "[^A-Za-z0-9_ ]", " "))
-        for (i=1; i<=cols(w); i++) asarray(BAD, w[i], 1)
+        for (i=1; i<=cols(w); i++) _fuv_unk(CUR, UNK, w[i])
         return
     }
-    if (ustrregexm(st, "^(forv|forva|forval|forvalu|forvalue|forvalues)[ ]+([A-Za-z_][A-Za-z0-9_]*)[ ]*=(.*)$")) {
-        nm = ustrregexs(2)
-        lst = strtrim(ustrregexra(ustrregexs(3), "[{][ ]*$", ""))
-        vals = _fuv_numlist(lst, ok)
-        if (ok & cols(vals)>0) _fuv_addvals(MV, nm, vals)
-        else asarray(BAD, nm, 1)
+    if (!ustrregexm(st, "^(local|loc)[ ]+(\+\+|--)?([A-Za-z_][A-Za-z0-9_]*)(.*)$")) return
+    inc = ustrregexs(2)                    // take every group before the next regex call
+    nm = ustrregexs(3)
+    rest = ustrregexs(4)
+    if (inc != "") {                       // local ++i
+        if (asarray_contains(CUR, nm)) {
+            vals = asarray(CUR, nm)
+            if (cols(vals) == 1 & strtoreal(vals[1]) < .) {
+                _fuv_set(CUR, UNK, nm, strofreal(strtoreal(vals[1]) + (inc == "++" ? 1 : -1), "%18.0g"))
+                return
+            }
+        }
+        _fuv_unk(CUR, UNK, nm)
         return
     }
-    if (ustrregexm(st, "^foreach[ ]+([A-Za-z_][A-Za-z0-9_]*)[ ]+(in|of[ ]+[a-z]+)[ ]+(.*)$")) {
-        nm = ustrregexs(1)                 // take every group before the next regex call
+    if (ustrregexm(rest, "^[ ]*=(.*)$")) {  // local y = 8 | local y = `x' + 2 | local s = "abc"
+        e = _fuv_expand(strtrim(ustrregexs(1)), CUR)
+        vals = J(1, 0, "")
+        for (i=1; i<=rows(e); i++) {
+            v = _fuv_eval(e[i], ok)
+            if (!ok) {
+                _fuv_unk(CUR, UNK, nm)
+                return
+            }
+            vals = vals, tokens(v)
+        }
+        _fuv_set(CUR, UNK, nm, vals)
+        return
+    }
+    if (ustrregexm(rest, "^[ ]*:")) {       // local n : word count ...
+        _fuv_unk(CUR, UNK, nm)
+        return
+    }
+    base = J(1, 0, "")
+    if (strpos(rest, BQ + nm + Q)) {        // local L `L' a b  (self-append)
+        if (asarray_contains(UNK, nm)) return
+        if (asarray_contains(CUR, nm)) base = asarray(CUR, nm)
+        rest = subinstr(rest, BQ + nm + Q, " ")
+    }
+    vals = _fuv_words(rest, CUR, ok)
+    if (!ok) {
+        _fuv_unk(CUR, UNK, nm)
+        return
+    }
+    _fuv_set(CUR, UNK, nm, (base, vals))
+}
+
+// a loop header (forvalues / foreach / while ... {): macros the body redefines from the run or
+// from themselves (a counter) are unknown from here on, until a line sets them again; the
+// loop macro takes its literal list. Returns 1 if the line is a loop header.
+real scalar _fuv_loop(string colvector C, real scalar i, transmorphic CUR, transmorphic UNK)
+{
+    string scalar st, nm, kind, lst, t, b
+    string rowvector vals, w
+    string colvector e
+    real scalar isfv, isfe, ok, k, j, depth, q
+    st = ustrregexra(C[i], _fuv_pfx(), "")
+    isfv = ustrregexm(st, "^(forv|forva|forval|forvalu|forvalue|forvalues)[ ]+[A-Za-z_][A-Za-z0-9_]*[ ]*=")
+    isfe = ustrregexm(st, "^foreach[ ]+[A-Za-z_][A-Za-z0-9_]*[ ]+(in|of[ ]+[a-z]+)[ ]")
+    if (!isfv & !isfe & !ustrregexm(st, "^while[ (]")) return(0)
+    // the body: up to the closing brace
+    depth = 0
+    j = i
+    for (k=i; k<=rows(C); k++) {
+        t = ustrregexra(C[k], char(36) + "[{][^}]*[}]", " ")
+        depth = depth + (strlen(t) - strlen(subinstr(t, "{", ""))) - (strlen(t) - strlen(subinstr(t, "}", "")))
+        j = k
+        if (depth <= 0) break
+    }
+    for (k=i+1; k<j; k++) {
+        b = ustrregexra(C[k], _fuv_pfx(), "")
+        t = b
+        while (ustrregexm(t, "local[(]([A-Za-z_][A-Za-z0-9_]*)[)]")) {
+            nm = ustrregexs(1)
+            t = subinstr(t, ustrregexs(0), " ", 1)
+            _fuv_unk(CUR, UNK, nm)
+        }
+        if (ustrregexm(b, "^(local|loc)[ ]+(\+\+|--)[ ]*([A-Za-z_][A-Za-z0-9_]*)")) _fuv_unk(CUR, UNK, ustrregexs(3))
+        else if (ustrregexm(b, "^(local|loc)[ ]+([A-Za-z_][A-Za-z0-9_]*)[ ]*[=:]")) _fuv_unk(CUR, UNK, ustrregexs(2))
+    }
+    if (isfv) {
+        q = ustrregexm(st, "^[a-z]+[ ]+([A-Za-z_][A-Za-z0-9_]*)[ ]*=(.*)$")
+        nm = ustrregexs(1)
+        lst = strtrim(ustrregexra(ustrregexs(2), "[{].*$", ""))
+        e = _fuv_expand(lst, CUR)
+        ok = 0
+        if (rows(e) == 1) vals = _fuv_numlist(e[1], ok)
+        if (ok & cols(vals) > 0) _fuv_set(CUR, UNK, nm, vals)
+        else _fuv_unk(CUR, UNK, nm)
+    }
+    else if (isfe) {
+        q = ustrregexm(st, "^foreach[ ]+([A-Za-z_][A-Za-z0-9_]*)[ ]+(in|of[ ]+[a-z]+)[ ]+(.*)$")
+        nm = ustrregexs(1)
         kind = ustrregexs(2)
         lst = ustrregexs(3)
         kind = ustrregexra(kind, "[ ]+", " ")
         lst = strtrim(ustrregexra(lst, "[{][ ]*$", ""))
-        if (kind == "in" & !strpos(lst, BQ) & !strpos(lst, char(36))) {
-            vals = tokens(subinstr(lst, char(34), " "))
-            if (cols(vals)>0) _fuv_addvals(MV, nm, vals)
-            else asarray(BAD, nm, 1)
-        }
+        ok = 0
+        vals = J(1, 0, "")
+        if (kind == "in") vals = _fuv_words(lst, CUR, ok)
         else if (kind == "of numlist") {
-            vals = _fuv_numlist(lst, ok)
-            if (ok & cols(vals)>0) _fuv_addvals(MV, nm, vals)
-            else asarray(BAD, nm, 1)
+            e = _fuv_expand(lst, CUR)
+            if (rows(e) == 1) vals = _fuv_numlist(e[1], ok)
         }
-        else if (kind == "of local" & asarray_contains(MV, lst) & !asarray_contains(BAD, lst)) {
-            _fuv_addvals(MV, nm, asarray(MV, lst))
+        else if (kind == "of local") {
+            if (asarray_contains(CUR, lst)) {
+                vals = asarray(CUR, lst)
+                ok = 1
+            }
         }
-        else asarray(BAD, nm, 1)
-        return
+        if (ok & cols(vals) > 0) _fuv_set(CUR, UNK, nm, vals)
+        else _fuv_unk(CUR, UNK, nm)
     }
-    if (ustrregexm(st, "^(local|loc)[ ]+(\+\+|--)?([A-Za-z_][A-Za-z0-9_]*)(.*)$")) {
-        nm = ustrregexs(3)
-        rest = ustrregexs(4)
-        if (ustrregexs(2) == "" & ustrregexm(rest, "^[ ]*=[ ]*(-?[0-9]+([.][0-9]+)?)[ ]*$")) {
-            _fuv_addvals(MV, nm, ustrregexs(1))          // local x = 1: a literal number
-            return
-        }
-        if (ustrregexs(2) != "" | ustrregexm(rest, "^[ ]*[=:]")) {
-            asarray(BAD, nm, 1)
-            return
-        }
-        rest = subinstr(rest, BQ + nm + Q, " ")          // local L `L' a b  (self-append)
-        if (strpos(rest, BQ) | strpos(rest, char(36))) {
-            asarray(BAD, nm, 1)
-            return
-        }
-        vals = tokens(subinstr(rest, char(34), " "))
-        if (cols(vals)>0) _fuv_addvals(MV, nm, vals)
-        else asarray(BAD, nm, 1)
-    }
+    return(1)
 }
 
 // gen/egen target of a line: returns (target, line with the target removed); ("", line) if none
@@ -483,8 +627,9 @@ string scalar _fuv_dropcreated(string scalar s, transmorphic CREATED)
     return(out)
 }
 
-// pass 2 on one line: one copy per combination of the literal values of its macros
-string colvector _fuv_expand(string scalar s, transmorphic MV, transmorphic BAD)
+// one copy of the text per combination of the values in force of its macros (a macro with no
+// known value is left as it is: the caller turns it into a wildcard)
+string colvector _fuv_expand(string scalar s, transmorphic CUR)
 {
     string scalar tmp, nm, REF
     string rowvector names, vals
@@ -495,18 +640,18 @@ string colvector _fuv_expand(string scalar s, transmorphic MV, transmorphic BAD)
     tmp = s
     while (ustrregexm(tmp, REF)) {
         nm = ustrregexs(1)
-        if (asarray_contains(MV, nm) & !asarray_contains(BAD, nm)) {
+        tmp = subinstr(tmp, ustrregexs(0), " ", 1)
+        if (asarray_contains(CUR, nm)) {
             if (!anyof(names, nm)) names = names, nm
         }
-        tmp = subinstr(tmp, ustrregexs(0), " ", 1)
     }
     if (cols(names) == 0) return(s)
     prod = 1
-    for (i=1; i<=cols(names); i++) prod = prod * cols(asarray(MV, names[i]))
+    for (i=1; i<=cols(names); i++) prod = prod * cols(asarray(CUR, names[i]))
     if (prod > 2000) return(s)                         // too many combinations: keep the wildcard
     out = s
     for (i=1; i<=cols(names); i++) {
-        vals = asarray(MV, names[i])
+        vals = asarray(CUR, names[i])
         nw = J(0, 1, "")
         for (j=1; j<=rows(out); j++) {
             for (k=1; k<=cols(vals); k++) nw = nw \ subinstr(out[j], char(96) + names[i] + char(39), vals[k])
@@ -516,16 +661,44 @@ string colvector _fuv_expand(string scalar s, transmorphic MV, transmorphic BAD)
     return(out)
 }
 
+// per dataset: the wildcard patterns that match at least one of its variables (and how many),
+// and the rename pairs whose old name or pattern does -> locals STUBS_D STUBN_D RENIDX RENN_<i>
+void _fuv_relevant(real scalar nren)
+{
+    string colvector v
+    string rowvector s
+    string scalar outs, outn, idx
+    real scalar i, n
+    v = tokens(st_local("vars"))'
+    s = tokens(st_local("STUBS"))
+    outs = ""; outn = ""; idx = ""
+    for (i=1; i<=cols(s); i++) {
+        n = sum(strmatch(v, s[i]))
+        if (n > 0) {
+            outs = outs + " " + s[i]
+            outn = outn + " " + strofreal(n)
+        }
+    }
+    for (i=1; i<=nren; i++) {
+        n = sum(strmatch(v, st_local("RO" + strofreal(i))))
+        if (n > 0) {
+            idx = idx + " " + strofreal(i)
+            st_local("RENN_" + strofreal(i), strofreal(n))
+        }
+    }
+    st_local("STUBS_D", outs); st_local("STUBN_D", outn); st_local("RENIDX", idx)
+}
+
 // tokenize every do-file in the list into frame default: tok where cmd | rng | renold rennew
 void _fuv_tokens(string scalar listfile, string scalar root)
 {
     string colvector files, L, C, allt, allw, allc, allr, allro, allrn, t, lines
-    string scalar s, r, head, tail, cmd, w1, w2, ku, wh
+    string scalar s, r, head, tail, cmd, prevcmd, w1, w2, ku, wh
     string rowvector ws, g
     real colvector m
-    real scalar f, i, k, p, q, ci, cw, cc, cr, cro, crn, nobs, e
+    real scalar f, i, k, p, q, ci, cw, cc, cr, cro, crn, nobs, e, cont
     string matrix TW
-    transmorphic MV, BAD, CREATED
+    transmorphic CUR, UNK, CREATED
     files = cat(listfile)
     files = select(files, strtrim(files) :!= "")
     for (f=1; f<=rows(files); f++) {
@@ -540,18 +713,21 @@ void _fuv_tokens(string scalar listfile, string scalar root)
         }
         L = cat(files[f])
         C = _fuv_clean(L)
-        // ---- pass 1: literal macro values, and the macro-built names this file creates ----
-        MV = asarray_create(); BAD = asarray_create(); CREATED = asarray_create()
+        // ---- pass 1: the macro-built names this file creates ----
+        CUR = asarray_create(); UNK = asarray_create(); CREATED = asarray_create()
         for (i=1; i<=rows(C); i++) {
             if (strtrim(C[i]) == "") continue
-            _fuv_defs(C[i], MV, BAD)
             g = _fuv_gen(C[i])
             if (strpos(g[1], char(96))) asarray(CREATED, g[1], 1)
         }
-        // ---- pass 2: tokens ----
+        // ---- pass 2: tokens, each line read with the macro values in force at that line ----
+        cont = 0; prevcmd = ""
         for (i=1; i<=rows(C); i++) {
             s = C[i]
-            if (strtrim(s) == "") continue
+            if (strtrim(s) == "") {
+                if (!strpos(L[i], "///")) cont = 0
+                continue
+            }
             wh = pathbasename(files[f]) + ":" + strofreal(i)
             g = _fuv_gen(s)
             s = _fuv_dropcreated(g[2], CREATED)
@@ -560,7 +736,12 @@ void _fuv_tokens(string scalar listfile, string scalar root)
             cmd = ustrregexra(cmd, "^(qui[a-z]*[ ]+|cap[a-z]*[ ]+|noi[a-z]*[ ]+|by[a-z]*[ ]+[^:]*:[ ]*|xi[ ]*:[ ]*|bys[a-z]*[ ]+[^:]*:[ ]*)+", "")
             cmd = ustrregexra(cmd, "^([a-z_]+).*", "$1")
             if (cmd == "quietly" | cmd == "capture" | cmd == "noisily") cmd = ""
-            lines = _fuv_expand(s, MV, BAD)
+            // a continuation line (the line above ends in ///) belongs to the command above:
+            // the variables of `keep a b ///` + `c d` are named by keep, not by a command "c"
+            if (cont) cmd = prevcmd
+            prevcmd = cmd
+            cont = strpos(L[i], "///") > 0
+            lines = _fuv_expand(s, CUR)
             for (e=1; e<=rows(lines); e++) {
                 s = lines[e]
                 // ---- remaining macro-built names -> wildcard; globals dropped; reshape stubs; renames ----
@@ -662,6 +843,8 @@ void _fuv_tokens(string scalar listfile, string scalar root)
                     }
                 }
             }
+            // the line read, update the macro values in force for the lines below
+            if (!_fuv_loop(C, i, CUR, UNK)) _fuv_defs(C[i], CUR, UNK)
         }
     }
     if (rows(allt) == 0) {

@@ -18,17 +18,44 @@ poppler's `pdftoppm` for the pixel comparison of figures).
 small standalone tools (`reachable_dofiles.py`, `compare_before_after.py`,
 `xlsx_sheet.py`).
 
+## How a job runs
+
+The orchestrator (`code-package`) starts with six set-up questions and runs only what
+the answers call for; the answers are recorded in the deliverable (`SETUP.md`).
+
+1. Is there a list or a map of the ids? (given, or candidates are proposed)
+2. A private package to publish, or a public one to audit?
+3. PII only, or the ids too?
+4. Scramble the ids, audit an existing scramble (with the private crosswalk), or
+   neither (then only: does the code rely on id order?)
+5. Compare the results with the paper, an internal package, both, or neither?
+6. Drop the variables the code never uses? (default yes when publishing; a
+   recommendation when auditing)
+
+The ID inventory is settled once, at set-up (`map-ids` → `id_inventory.xlsx`); every
+later skill reads it. Then three tasks, in this order:
+
+| Task | Skills | Result |
+|---|---|---|
+| 1. Minimize | `minimize-variables` | only the variables the reachable code uses are kept; the package still runs |
+| 2. Audit, clean up, audit again | `audit-pii`, `check-id-order`; then `strip-pii`, code fixes, `scramble-ids` | an audit workbook *before clean-up* (what there is to decide) and one *after clean-up* (what is left); tabs numbered `1.` PII, `2.` ids |
+| 3. Compare | `compare-code-results` | original package against the cleaned one, every output file; and the cleaned one against the paper and/or the internal package |
+
+The finish: the package shipped clean (inputs + code), a public readme, a new
+`CHANGES.txt` (variables kept per dataset, every code line changed), private processing
+notes, and one report whose bottom-line table tags each question with its task.
+
 ## Skills
 
 | Skill | Invoke as | Purpose |
 |---|---|---|
 | Orchestrator | `/deidentify:code-package` | Asks what the job is (publish or audit; PII only or ids too; scramble or audit a scramble; what to compare with; drop unused variables), then runs only the skills needed, in order, and writes the records. |
 | Map ids | `/deidentify:map-ids` | Build the ID inventory once, at set-up: the user's list or description of the ids, checked by a scan (id-like names, row-unique variables, same values in two files); without a list, the scan proposes candidates to accept or reject. Every other skill reads it. |
-| Audit PII | `/deidentify:audit-pii` | Classify every variable (identifier / likely PII / other) with `pii_classify`, summarise the other surfaces (notes, characteristics, value labels) with `pii_surfaces`, scan string-tail bytes, and, with the private crosswalks (if the user has access to them), prove no original id survives. One review workbook. Read-only. |
+| Audit PII | `/deidentify:audit-pii` | Shortlist the variables likely to hold PII with `pii_classify` (the inventory's ids are set aside; a person decides), summarise the other surfaces (notes, characteristics, value labels) with `pii_surfaces`, scan string-tail bytes, and, with the private crosswalks (if the user has access to them), prove no original id survives (membership test, row test, text sweep). One review workbook per audit. Read-only: it never acts on what it flags. |
 | Check id order | `/deidentify:check-id-order` | Does the code use an id's value or order (static scan + random-relabel test)? How much order does an old→new map keep (rank correlation, overlap)? Before scrambling, to choose the method; after, to audit it. |
 | Strip PII | `/deidentify:strip-pii` | Drop or overwrite confirmed PII with a clean overwrite (no residual "ghost tail"). |
 | Scramble IDs | `/deidentify:scramble-ids` | Seeded 1-to-1 ID correspondence tables (kept private), code update, fail-loud verification. |
-| Minimize variables | `/deidentify:minimize-variables` | Keep only variables the reachable code uses (comments ignored); class each variable by how it is used; static read of the do-files (case-sensitive, literal macros filled in, `gen` targets ignored); drop in one round, proven by re-running; `referenced_in` per variable. |
+| Minimize variables | `/deidentify:minimize-variables` | Keep only variables the reachable code uses (comments ignored); class each variable by how it is used. A static read of the do-files, nothing is run: case-sensitive, macro-built names filled with the value in force at each line, `gen` targets ignored, and a rename is not a use (only a computation with the new name is). Drop in one round, proven by re-running; a halt puts back only the variables tied to it, and a retry resumes at the do-file that halted; the loop ends on one full run from a fresh copy. |
 | Compare results | `/deidentify:compare-code-results` | Compare every estimate vs the original package and/or a paper (tables, appendix, in-text numbers, same-machine figures, before/after a change), full table + summary in one workbook. |
 
 ## Install
